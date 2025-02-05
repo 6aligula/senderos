@@ -1,17 +1,22 @@
+// Archivo: app/src/main/java/com/example/senderos/MainActivity.kt
 package com.example.senderos
 
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
@@ -26,14 +31,18 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import coil.compose.rememberAsyncImagePainter
 import com.example.senderos.ui.theme.SenderosTheme
+
+// Importa tu clase Routes ya creada (no la redeclares aquí)
+import com.example.senderos.Routes
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,6 +64,7 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigator() {
+    // Se utiliza rememberNavController para manejar la navegación
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = Routes.Login.route) {
         composable(Routes.Login.route) {
@@ -63,12 +73,15 @@ fun AppNavigator() {
         composable(Routes.Register.route) {
             RegisterScreen(navController)
         }
+        composable(Routes.Profile.route) {
+            ProfileScreen(navController)
+        }
     }
 }
 
 @Composable
-fun LoginScreen(navController: NavHostController) {
-    // Estados para email y contraseña
+fun LoginScreen(navController: androidx.navigation.NavHostController) {
+    // Estados para el correo y la contraseña
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -84,8 +97,6 @@ fun LoginScreen(navController: NavHostController) {
             style = MaterialTheme.typography.headlineLarge
         )
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de correo electrónico
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -98,8 +109,6 @@ fun LoginScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth(0.9f)
         )
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de contraseña
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -112,19 +121,17 @@ fun LoginScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth(0.9f)
         )
         Spacer(modifier = Modifier.height(24.dp))
-
-        // Botón para iniciar sesión
         Button(
             onClick = {
-                // Aquí agregar la lógica de autenticación (por ejemplo, consultar un API)
+                // Aquí se simula que la autenticación es exitosa.
+                // Navega a la pantalla de creación de perfil.
+                navController.navigate(Routes.Profile.route)
             },
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Text("Ingresar")
         }
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Opción para ir a registro
         TextButton(onClick = { navController.navigate(Routes.Register.route) }) {
             Text("¿No tienes una cuenta? Regístrate")
         }
@@ -132,8 +139,8 @@ fun LoginScreen(navController: NavHostController) {
 }
 
 @Composable
-fun RegisterScreen(navController: NavHostController) {
-    // Estados para email, contraseña y confirmación de contraseña
+fun RegisterScreen(navController: androidx.navigation.NavHostController) {
+    // Estados para correo, contraseña y confirmación de contraseña
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -151,8 +158,6 @@ fun RegisterScreen(navController: NavHostController) {
             style = MaterialTheme.typography.headlineLarge
         )
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de correo electrónico
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -165,8 +170,6 @@ fun RegisterScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth(0.9f)
         )
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de contraseña
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -179,8 +182,6 @@ fun RegisterScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth(0.9f)
         )
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Campo de confirmación de contraseña
         OutlinedTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
@@ -193,15 +194,12 @@ fun RegisterScreen(navController: NavHostController) {
             modifier = Modifier.fillMaxWidth(0.9f)
         )
         Spacer(modifier = Modifier.height(24.dp))
-
-        // Botón para registrarse
         Button(
             onClick = {
-                // Validar que los campos no estén vacíos y que las contraseñas coincidan
+                // Validación simple
                 if (email.isNotBlank() && password.isNotBlank() && password == confirmPassword) {
-                    // Aquí podrías agregar la lógica para registrar al usuario (por ejemplo, llamar a un API)
-
-                    // Si el registro es exitoso, se navega automáticamente al login:
+                    // Aquí se realizaría la lógica de registro (p.ej., llamada a un API)
+                    // Si el registro es exitoso, se vuelve a la pantalla de login:
                     navController.popBackStack()
                 } else {
                     errorMessage = "Verifica que los campos estén completos y que las contraseñas coincidan."
@@ -212,8 +210,6 @@ fun RegisterScreen(navController: NavHostController) {
             Text("Registrarse")
         }
         Spacer(modifier = Modifier.height(16.dp))
-
-        // Mostrar mensaje de error en caso de que haya problemas con los datos
         if (errorMessage.isNotEmpty()) {
             Text(
                 text = errorMessage,
@@ -221,10 +217,78 @@ fun RegisterScreen(navController: NavHostController) {
             )
             Spacer(modifier = Modifier.height(16.dp))
         }
-
-        // Botón para volver a la pantalla de login manualmente (opcional)
         TextButton(onClick = { navController.popBackStack() }) {
             Text("Volver a iniciar sesión")
+        }
+    }
+}
+
+@Composable
+fun ProfileScreen(navController: androidx.navigation.NavHostController) {
+    // Estados para el nombre, la descripción y la imagen seleccionada
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
+    var imageUri by remember { mutableStateOf<Uri?>(null) }
+
+    // Launcher para seleccionar imagen desde la galería
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        imageUri = uri
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Crear Perfil", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = name,
+            onValueChange = { name = it },
+            label = { Text("Nombre") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(0.9f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = description,
+            onValueChange = { description = it },
+            label = { Text("Descripción") },
+            modifier = Modifier.fillMaxWidth(0.9f)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(
+            onClick = { launcher.launch("image/*") },
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            Text("Seleccionar foto")
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+        imageUri?.let { uri ->
+            Image(
+                painter = rememberAsyncImagePainter(uri),
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(200.dp),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+        Button(
+            onClick = {
+                // Aquí se implementaría la lógica para guardar el perfil.
+                // Por ejemplo, enviar nombre, descripción y foto a un servidor.
+                // En este ejemplo, se vuelve a la pantalla anterior.
+                navController.popBackStack()
+            },
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            Text("Guardar Perfil")
         }
     }
 }
