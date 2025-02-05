@@ -137,6 +137,7 @@ fun RegisterScreen(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
+    var errorMessage by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -196,8 +197,15 @@ fun RegisterScreen(navController: NavHostController) {
         // Botón para registrarse
         Button(
             onClick = {
-                // Validar que 'password' y 'confirmPassword' sean iguales
-                // Agregar la lógica de registro (por ejemplo, llamar a un API para registrar el usuario)
+                // Validar que los campos no estén vacíos y que las contraseñas coincidan
+                if (email.isNotBlank() && password.isNotBlank() && password == confirmPassword) {
+                    // Aquí podrías agregar la lógica para registrar al usuario (por ejemplo, llamar a un API)
+
+                    // Si el registro es exitoso, se navega automáticamente al login:
+                    navController.popBackStack()
+                } else {
+                    errorMessage = "Verifica que los campos estén completos y que las contraseñas coincidan."
+                }
             },
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
@@ -205,7 +213,16 @@ fun RegisterScreen(navController: NavHostController) {
         }
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Botón para volver a la pantalla de login
+        // Mostrar mensaje de error en caso de que haya problemas con los datos
+        if (errorMessage.isNotEmpty()) {
+            Text(
+                text = errorMessage,
+                color = MaterialTheme.colorScheme.error
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Botón para volver a la pantalla de login manualmente (opcional)
         TextButton(onClick = { navController.popBackStack() }) {
             Text("Volver a iniciar sesión")
         }
