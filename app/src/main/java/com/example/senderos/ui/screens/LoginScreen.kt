@@ -4,13 +4,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.senderos.Routes
-import androidx.compose.ui.Alignment
+
 @Composable
 fun LoginScreen(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
@@ -50,10 +51,7 @@ fun LoginScreen(navController: NavHostController) {
         )
         Spacer(modifier = Modifier.height(24.dp))
         Button(
-            onClick = {
-                // Simula un login exitoso y navega a la pantalla de edición de perfil
-                navController.navigate(Routes.Profile.route)
-            },
+            onClick = { navController.navigate(Routes.Profile.route) },
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Text("Ingresar")
@@ -62,9 +60,13 @@ fun LoginScreen(navController: NavHostController) {
         TextButton(onClick = { navController.navigate(Routes.Register.route) }) {
             Text("¿No tienes una cuenta? Regístrate")
         }
+        Spacer(modifier = Modifier.height(16.dp))
+        // Botón que navega a la pantalla del mapa
+        Button(
+            onClick = { navController.navigate(Routes.Map.route) },
+            modifier = Modifier.fillMaxWidth(0.9f)
+        ) {
+            Text("Ver Mapa")
+        }
     }
-}
-
-class Alignment {
-
 }

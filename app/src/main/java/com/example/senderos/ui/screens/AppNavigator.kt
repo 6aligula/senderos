@@ -13,6 +13,7 @@ fun AppNavigator() {
         composable(Routes.Login.route) { LoginScreen(navController) }
         composable(Routes.Register.route) { RegisterScreen(navController) }
         composable(Routes.Profile.route) { ProfileScreen(navController) }
-        composable(Routes.ProfileDisplay.route) { ProfileDisplayScreen(navController) }
+        composable(Routes.ProfileDisplay.route) { ProfileDisplayScreen(navController)}
+        composable(Routes.Map.route){ MapScreen() }
     }
 }
