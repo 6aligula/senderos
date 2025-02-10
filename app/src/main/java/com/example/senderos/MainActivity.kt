@@ -1,11 +1,10 @@
-// Archivo: app/src/main/java/com/example/senderos/MainActivity.kt
 package com.example.senderos
 
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
+import androidx.core.view.WindowCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -35,23 +34,30 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import coil.compose.rememberAsyncImagePainter
 import com.example.senderos.ui.theme.SenderosTheme
 
-// Importa tu clase Routes ya creada (no la redeclares aquí)
+// Importa la clase Routes (ya definida en Routes.kt)
 import com.example.senderos.Routes
+
+// Objeto global para almacenar datos del perfil (solo para demostración)
+object ProfileState {
+    var name by mutableStateOf("")
+    var description by mutableStateOf("")
+    var imageUri by mutableStateOf<Uri?>(null)
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Activa edge-to-edge (opcional)
-        enableEdgeToEdge()
+        // Habilita edge-to-edge usando WindowCompat
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContent {
             SenderosTheme {
-                // Usamos un Scaffold como layout base
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
                         AppNavigator()
@@ -64,24 +70,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun AppNavigator() {
-    // Se utiliza rememberNavController para manejar la navegación
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = Routes.Login.route) {
-        composable(Routes.Login.route) {
-            LoginScreen(navController)
-        }
-        composable(Routes.Register.route) {
-            RegisterScreen(navController)
-        }
-        composable(Routes.Profile.route) {
-            ProfileScreen(navController)
-        }
+        composable(Routes.Login.route) { LoginScreen(navController) }
+        composable(Routes.Register.route) { RegisterScreen(navController) }
+        composable(Routes.Profile.route) { ProfileScreen(navController) }
+        composable(Routes.ProfileDisplay.route) { ProfileDisplayScreen(navController) }
     }
 }
 
 @Composable
-fun LoginScreen(navController: androidx.navigation.NavHostController) {
-    // Estados para el correo y la contraseña
+fun LoginScreen(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
 
@@ -92,10 +91,7 @@ fun LoginScreen(navController: androidx.navigation.NavHostController) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Iniciar sesión",
-            style = MaterialTheme.typography.headlineLarge
-        )
+        Text("Iniciar sesión", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = email,
@@ -123,8 +119,7 @@ fun LoginScreen(navController: androidx.navigation.NavHostController) {
         Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = {
-                // Aquí se simula que la autenticación es exitosa.
-                // Navega a la pantalla de creación de perfil.
+                // Simula un login exitoso y navega a la pantalla de edición de perfil
                 navController.navigate(Routes.Profile.route)
             },
             modifier = Modifier.fillMaxWidth(0.9f)
@@ -139,8 +134,7 @@ fun LoginScreen(navController: androidx.navigation.NavHostController) {
 }
 
 @Composable
-fun RegisterScreen(navController: androidx.navigation.NavHostController) {
-    // Estados para correo, contraseña y confirmación de contraseña
+fun RegisterScreen(navController: NavHostController) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -153,10 +147,7 @@ fun RegisterScreen(navController: androidx.navigation.NavHostController) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "Registro",
-            style = MaterialTheme.typography.headlineLarge
-        )
+        Text("Registro", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = email,
@@ -196,10 +187,8 @@ fun RegisterScreen(navController: androidx.navigation.NavHostController) {
         Spacer(modifier = Modifier.height(24.dp))
         Button(
             onClick = {
-                // Validación simple
                 if (email.isNotBlank() && password.isNotBlank() && password == confirmPassword) {
-                    // Aquí se realizaría la lógica de registro (p.ej., llamada a un API)
-                    // Si el registro es exitoso, se vuelve a la pantalla de login:
+                    // Simula un registro exitoso y vuelve a la pantalla de login
                     navController.popBackStack()
                 } else {
                     errorMessage = "Verifica que los campos estén completos y que las contraseñas coincidan."
@@ -211,10 +200,7 @@ fun RegisterScreen(navController: androidx.navigation.NavHostController) {
         }
         Spacer(modifier = Modifier.height(16.dp))
         if (errorMessage.isNotEmpty()) {
-            Text(
-                text = errorMessage,
-                color = MaterialTheme.colorScheme.error
-            )
+            Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.height(16.dp))
         }
         TextButton(onClick = { navController.popBackStack() }) {
@@ -224,8 +210,8 @@ fun RegisterScreen(navController: androidx.navigation.NavHostController) {
 }
 
 @Composable
-fun ProfileScreen(navController: androidx.navigation.NavHostController) {
-    // Estados para el nombre, la descripción y la imagen seleccionada
+fun ProfileScreen(navController: NavHostController) {
+    // Pantalla para editar (crear) el perfil
     var name by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
@@ -244,7 +230,7 @@ fun ProfileScreen(navController: androidx.navigation.NavHostController) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Crear Perfil", style = MaterialTheme.typography.headlineLarge)
+        Text("Editar Perfil", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(16.dp))
         OutlinedTextField(
             value = name,
@@ -281,14 +267,45 @@ fun ProfileScreen(navController: androidx.navigation.NavHostController) {
         }
         Button(
             onClick = {
-                // Aquí se implementaría la lógica para guardar el perfil.
-                // Por ejemplo, enviar nombre, descripción y foto a un servidor.
-                // En este ejemplo, se vuelve a la pantalla anterior.
-                navController.popBackStack()
+                // Guarda los datos en el objeto global (solo para demostración)
+                ProfileState.name = name
+                ProfileState.description = description
+                ProfileState.imageUri = imageUri
+                // Navega a la pantalla de visualización del perfil (sin botón de guardar)
+                navController.navigate(Routes.ProfileDisplay.route)
             },
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
-            Text("Guardar Perfil")
+            Text("Guardar cambios")
+        }
+    }
+}
+
+@Composable
+fun ProfileDisplayScreen(navController: NavHostController) {
+    // Pantalla para mostrar el perfil guardado (sin botón de guardar)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Perfil Guardado", style = MaterialTheme.typography.headlineLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Nombre: ${ProfileState.name}")
+        Spacer(modifier = Modifier.height(8.dp))
+        Text("Descripción: ${ProfileState.description}")
+        Spacer(modifier = Modifier.height(16.dp))
+        ProfileState.imageUri?.let { uri ->
+            Image(
+                painter = rememberAsyncImagePainter(uri),
+                contentDescription = "Foto de perfil",
+                modifier = Modifier
+                    .fillMaxWidth(0.9f)
+                    .height(200.dp),
+                contentScale = ContentScale.Crop
+            )
         }
     }
 }
