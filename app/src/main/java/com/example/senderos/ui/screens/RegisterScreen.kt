@@ -1,3 +1,4 @@
+// Archivo: app/src/main/java/com/example/senderos/ui/screens/RegisterScreen.kt
 package com.example.senderos.ui.screens
 
 import androidx.compose.foundation.layout.*
@@ -10,6 +11,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import kotlinx.coroutines.launch
+import com.example.senderos.network.registerUser
 
 @Composable
 fun RegisterScreen(navController: NavHostController) {
@@ -17,6 +20,8 @@ fun RegisterScreen(navController: NavHostController) {
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
+
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -66,8 +71,14 @@ fun RegisterScreen(navController: NavHostController) {
         Button(
             onClick = {
                 if (email.isNotBlank() && password.isNotBlank() && password == confirmPassword) {
-                    // Simula un registro exitoso y vuelve a la pantalla de login
-                    navController.popBackStack()
+                    coroutineScope.launch {
+                        val result = registerUser(email, password)
+                        if (result == "Registro exitoso") {
+                            navController.popBackStack()
+                        } else {
+                            errorMessage = result
+                        }
+                    }
                 } else {
                     errorMessage = "Verifica que los campos estén completos y que las contraseñas coincidan."
                 }

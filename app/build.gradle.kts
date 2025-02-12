@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
 }
 
 android {
@@ -43,6 +44,11 @@ dependencies {
     implementation ("io.coil-kt:coil-compose:2.2.2")
     implementation ("androidx.navigation:navigation-compose:2.4.0-alpha04")
     implementation ("org.osmdroid:osmdroid-android:6.1.14")
+    implementation("io.ktor:ktor-client-core:2.3.0")
+    implementation("io.ktor:ktor-client-cio:2.3.0")
+    implementation("io.ktor:ktor-client-content-negotiation:2.3.0")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
