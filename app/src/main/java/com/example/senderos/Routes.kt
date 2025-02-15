@@ -7,5 +7,13 @@ sealed class Routes(val route: String) {
     object Profile : Routes("profile")
     object ProfileDisplay : Routes("profileDisplay")
     object Map : Routes("map") // Nueva ruta para el map
+    // Nuevas rutas para tu app de parking:
+    object Home : Routes("home")
+    object Parking : Routes("parking")
+
+    // Ruta con argumento "plate"
+    object VehicleInfo : Routes("vehicleInfo/{plate}") {
+        fun createRoute(plate: String) = "vehicleInfo/$plate"
+    }
 
 }

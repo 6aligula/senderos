@@ -63,7 +63,7 @@ fun LoginScreen(navController: NavHostController) {
         Spacer(modifier = Modifier.height(16.dp))
         // Botón que navega a la pantalla del mapa
         Button(
-            onClick = { navController.navigate(Routes.Map.route) },
+            onClick = { navController.navigate(Routes.Home.route) },
             modifier = Modifier.fillMaxWidth(0.9f)
         ) {
             Text("Ver Mapa")
