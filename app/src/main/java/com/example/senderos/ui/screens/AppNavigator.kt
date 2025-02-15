@@ -18,7 +18,7 @@ fun AppNavigator() {
     // puedes crearlo una sola vez aquí y pasarlo a las pantallas.
     val parkingViewModel = remember { ParkingViewModel() }
 
-    NavHost(navController = navController, startDestination = Routes.Login.route) {
+    NavHost(navController = navController, startDestination = Routes.Home.route) {
         composable(Routes.Login.route) { LoginScreen(navController) }
         composable(Routes.Register.route) { RegisterScreen(navController) }
         composable(Routes.Profile.route) { ProfileScreen(navController) }
