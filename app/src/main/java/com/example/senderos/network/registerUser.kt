@@ -47,7 +47,7 @@ suspend fun registerUser(email: String, password: String): String {
                 val errorResponse = Json.decodeFromString<ErrorResponse>(responseBody)
                 errorResponse.error
             } catch (e: Exception) {
-                "Error en el registro"01:03:51
+                "Error en el registro"
 
 
 
