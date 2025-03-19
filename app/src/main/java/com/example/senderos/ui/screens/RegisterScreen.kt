@@ -40,7 +40,7 @@ suspend fun registerUser(email: String, password: String): String {
         }
     }
     return try {
-        val response: HttpResponse = client.post("http://192.168.18.252:5000/register") {
+        val response: HttpResponse = client.post("http://192.168.1.180:5000/register") {
             contentType(ContentType.Application.Json)
             setBody(RegisterRequest(email, password))
         }

@@ -31,7 +31,7 @@ suspend fun registerUser(email: String, password: String): String {
         val requestJson = Json.encodeToString(registerRequest)
         println("JSON serializado: $requestJson")
 
-        val response: HttpResponse = client.post("http://192.168.18.253:5000/register") {
+        val response: HttpResponse = client.post("http://192.168.1.180:5000/register") {
             contentType(ContentType.Application.Json)
             setBody(registerRequest)
         }
