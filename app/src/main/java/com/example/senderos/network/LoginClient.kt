@@ -1,7 +1,6 @@
 package com.example.senderos.network
 
 import android.content.Context
-import android.content.SharedPreferences
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.request.*
@@ -9,12 +8,12 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.example.senderos.model.LoginRequest
 import com.example.senderos.model.LoginResponse
-import kotlinx.serialization.Serializable
-
+import com.example.senderos.utils.dataStore
+import com.example.senderos.utils.PreferencesKeys.AUTH_TOKEN
+import androidx.datastore.preferences.core.edit
 
 
 suspend fun loginUser(email: String, password: String, context: Context): String {
@@ -52,7 +51,10 @@ suspend fun loginUser(email: String, password: String, context: Context): String
     }
 }
 
-private fun saveToken(context: Context, token: String) {
-    val sharedPreferences: SharedPreferences = context.getSharedPreferences("user_prefs", Context.MODE_PRIVATE)
-    sharedPreferences.edit().putString("auth_token", token).apply()
+
+private suspend fun saveToken(context: Context, token: String) {
+    // Llamamos al dataStore definido en la extensión de Context
+    context.dataStore.edit { preferences ->
+        preferences[AUTH_TOKEN] = token
+    }
 }

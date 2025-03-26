@@ -1,5 +1,8 @@
 package com.example.senderos.network
 
+import android.content.Context
+import com.example.senderos.model.ProfileRequest
+import com.example.senderos.utils.getAuthToken
 import io.ktor.client.*
 import io.ktor.client.engine.cio.*
 import io.ktor.client.plugins.contentnegotiation.*
@@ -8,16 +11,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
-import com.example.senderos.model.Profile
-import kotlinx.serialization.Serializable
 
-@Serializable
-data class ApiResponse(val message: String)
-
-object ApiClient {
-    private const val BASE_URL = "http://192.168.18.253:5000/"
-
+object ProfileClient {
     private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(Json {
@@ -28,18 +23,23 @@ object ApiClient {
         }
     }
 
-    suspend fun registerProfile(profile: Profile): String {
+    suspend fun createProfile(context: Context, profileRequest: ProfileRequest): String {
         return try {
-            val response: HttpResponse = client.post("${BASE_URL}register_profile") {
+            // Obtenemos el token desde DataStore
+            val token = getAuthToken(context)
+
+            // Hacemos la petición con el token en el header
+            val response: HttpResponse = client.post("http://192.168.18.253:5000/create_profile") {
                 contentType(ContentType.Application.Json)
-                setBody(profile)
+                header(HttpHeaders.Authorization, "Bearer $token")
+                setBody(profileRequest)
             }
 
+            val responseBody = response.bodyAsText()
             if (response.status == HttpStatusCode.OK) {
-                "Registro exitoso"
+                "Perfil creado exitosamente"
             } else {
-                val errorResponse = Json.decodeFromString<ApiResponse>(response.bodyAsText())
-                errorResponse.message
+                responseBody
             }
         } catch (e: Exception) {
             e.printStackTrace()
