@@ -1,60 +1,64 @@
 package com.example.senderos.network
 
 import android.content.Context
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.request.*
-import io.ktor.client.statement.*
-import io.ktor.http.*
-import io.ktor.client.plugins.contentnegotiation.*
-import io.ktor.serialization.kotlinx.json.*
-import kotlinx.serialization.json.Json
+import com.example.senderos.BuildConfig
 import com.example.senderos.model.LoginRequest
 import com.example.senderos.model.LoginResponse
+import com.example.senderos.model.ErrorResponse
 import com.example.senderos.utils.dataStore
 import com.example.senderos.utils.PreferencesKeys.AUTH_TOKEN
 import androidx.datastore.preferences.core.edit
 
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.*
+import io.ktor.client.request.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import kotlinx.serialization.json.Json
 
-suspend fun loginUser(email: String, password: String, context: Context): String {
-    val client = HttpClient(CIO) {
+object AuthClient {
+    // URL base inyectada en tiempo de compilación
+    private const val BASE_URL = BuildConfig.SERVER_IP
+
+    // Cliente único para todas las peticiones
+    private val client = HttpClient(CIO) {
         install(ContentNegotiation) {
             json(Json {
-                prettyPrint = true
-                isLenient = true
+                prettyPrint       = true
+                isLenient         = true
                 ignoreUnknownKeys = true
             })
         }
     }
-    return try {
-        val loginRequest = LoginRequest(email, password)
-        // Conexión con el servidor Flask para login
-        val response: HttpResponse = client.post("http://192.168.18.253:5000/login") {
-            contentType(ContentType.Application.Json)
-            setBody(loginRequest)
-        }
 
-        val responseBody = response.bodyAsText()
-        if (response.status == HttpStatusCode.OK) {
-            val loginResponse = Json.decodeFromString<LoginResponse>(responseBody)
-            saveToken(context, loginResponse.token)
-            "Login exitoso"
-        } else {
-            val errorResponse = Json.decodeFromString<ErrorResponse>(responseBody)
-            errorResponse.error
+    // Función de login reutilizando el mismo cliente
+    suspend fun loginUser(email: String, password: String, context: Context): String {
+        return try {
+            val response: HttpResponse = client.post("$BASE_URL/login") {
+                contentType(ContentType.Application.Json)
+                setBody(LoginRequest(email, password))
+            }
+            val bodyText = response.bodyAsText()
+            if (response.status == HttpStatusCode.OK) {
+                val loginResp = Json.decodeFromString<LoginResponse>(bodyText)
+                saveToken(context, loginResp.token)
+                "Login exitoso"
+            } else {
+                val err = Json.decodeFromString<ErrorResponse>(bodyText)
+                err.error
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            "Error de conexión: ${e.localizedMessage}"
         }
-    } catch (e: Exception) {
-        e.printStackTrace()
-        "Error de conexión: ${e.localizedMessage}"
-    } finally {
-        client.close()
     }
-}
 
-
-private suspend fun saveToken(context: Context, token: String) {
-    // Llamamos al dataStore definido en la extensión de Context
-    context.dataStore.edit { preferences ->
-        preferences[AUTH_TOKEN] = token
+    // Guardado de token en DataStore
+    private suspend fun saveToken(context: Context, token: String) {
+        context.dataStore.edit { prefs ->
+            prefs[AUTH_TOKEN] = token
+        }
     }
 }
