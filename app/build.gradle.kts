@@ -17,6 +17,8 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SERVER_IP", "\"${findProperty("SERVER_IP") ?: "http://192.168.18.253:5000"}\"")
+
     }
 
     buildTypes {
@@ -37,6 +39,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

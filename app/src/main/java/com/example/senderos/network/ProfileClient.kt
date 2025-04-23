@@ -11,6 +11,7 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import com.example.senderos.BuildConfig
 
 object ProfileClient {
     private val client = HttpClient(CIO) {
