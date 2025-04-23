@@ -1,9 +1,24 @@
+import java.util.Properties
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22" // Agrega el plugin directamente
     alias(libs.plugins.kotlin.compose)
 }
+
+// ② leemos cada fichero en vars de script
+fun loadServerIp(envName: String): String {
+    val f = rootProject.file("env/$envName.properties")
+    check(f.exists()) { "No existe env/$envName.properties" }
+    return Properties().apply {
+        load(f.inputStream())
+    }.getProperty("SERVER_IP")
+        ?: error("env/$envName.properties debe contener SERVER_IP")
+}
+
+val devServerIp:    String = loadServerIp("dev")
+val stagingServerIp:String = loadServerIp("staging")
+val prodServerIp:   String = loadServerIp("prod")
 
 android {
     namespace = "com.example.senderos"
@@ -17,8 +32,23 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "SERVER_IP", "\"${findProperty("SERVER_IP") ?: "http://192.168.18.253:5000"}\"")
+    }
 
+    // dimension y flavors
+    flavorDimensions += "environment"
+    productFlavors {
+        create("dev") {
+            dimension = "environment"
+            buildConfigField("String","SERVER_IP","\"$devServerIp\"")
+        }
+        create("staging") {
+            dimension = "environment"
+            buildConfigField("String","SERVER_IP","\"$stagingServerIp\"")
+        }
+        create("prod") {
+            dimension = "environment"
+            buildConfigField("String","SERVER_IP","\"$prodServerIp\"")
+        }
     }
 
     buildTypes {
