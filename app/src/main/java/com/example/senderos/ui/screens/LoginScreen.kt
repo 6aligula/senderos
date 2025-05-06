@@ -11,6 +11,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.senderos.Routes
 import kotlinx.coroutines.launch
 import com.example.senderos.network.AuthClient
 
@@ -65,10 +66,9 @@ fun LoginScreen(navController: NavHostController) {
                     errorMessage = "Completa todos los campos."
                 } else {
                     coroutineScope.launch {
-                        // Llamamos al método de AuthClient
                         val result = AuthClient.loginUser(email, password, context)
                         if (result == "Login exitoso") {
-                            navController.navigate("profile")
+                            navController.navigate(Routes.Profile.route)
                         } else {
                             errorMessage = result
                         }
@@ -79,6 +79,7 @@ fun LoginScreen(navController: NavHostController) {
         ) {
             Text("Ingresar")
         }
+
         Spacer(Modifier.height(16.dp))
 
         if (errorMessage.isNotEmpty()) {
@@ -89,8 +90,13 @@ fun LoginScreen(navController: NavHostController) {
             Spacer(Modifier.height(16.dp))
         }
 
-        TextButton(onClick = { navController.navigate("register") }) {
+        TextButton(onClick = { navController.navigate(Routes.Register.route) }) {
             Text("¿No tienes una cuenta? Regístrate")
+        }
+
+        // ✅ Botón adicional para ir al mapa
+        TextButton(onClick = { navController.navigate(Routes.Map.route) }) {
+            Text("Ver mapa")
         }
     }
 }
