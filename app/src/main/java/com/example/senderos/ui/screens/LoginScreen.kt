@@ -14,9 +14,15 @@ import androidx.navigation.NavHostController
 import com.example.senderos.Routes
 import kotlinx.coroutines.launch
 import com.example.senderos.network.AuthClient
+import com.example.senderos.utils.RequestLocationPermission
 
 @Composable
 fun LoginScreen(navController: NavHostController) {
+    RequestLocationPermission(
+        onGranted = { /* aquí no necesitas hacer nada especial  */ },
+        onDenied  = { /* muestra un Snackbar si quieres */ }
+    )
+
     var email        by remember { mutableStateOf("") }
     var password     by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf("") }
