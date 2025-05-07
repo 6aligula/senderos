@@ -27,9 +27,13 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import androidx.compose.foundation.layout.systemBarsPadding
+//Asegúrate de importar el ViewModel correcto
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-fun MapScreen() {
+fun MapScreen(
+    mapViewModel: MapViewModel = viewModel()
+) {
     val context = LocalContext.current
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
@@ -149,18 +153,19 @@ fun MapScreen() {
             }
             val locationCallback = object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
-                    val location = locationResult.lastLocation
-                    if (location != null) {
-                        val geoPoint = GeoPoint(location.latitude, location.longitude)
-                        currentLocation.value = geoPoint
-                        // Si seguimos el seguimiento (no se movió el mapa), centrar
-                        if (shouldFollowLocation) {
-                            mapViewRef.value?.controller?.animateTo(geoPoint)
-                        }
-                        // Actualizar la posición del Marker
-                        markerRef.value?.position = geoPoint
-                        mapViewRef.value?.invalidate()
+                    val location = locationResult.lastLocation ?: return
+
+                    // ② Llama al método de la INSTANCIA, no a la clase
+                    mapViewModel.onLocationChanged(location.latitude, location.longitude)
+
+                    // ③ Resto de la lógica de UI
+                    val geoPoint = GeoPoint(location.latitude, location.longitude)
+                    currentLocation.value = geoPoint
+                    if (shouldFollowLocation) {
+                        mapViewRef.value?.controller?.animateTo(geoPoint)
                     }
+                    markerRef.value?.position = geoPoint
+                    mapViewRef.value?.invalidate()
                 }
             }
             try {
