@@ -1,10 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Permisos existentes -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Permiso para la API de Activity Recognition (Android Q+) -->
+    <uses-permission
+        android:name="android.permission.ACTIVITY_RECOGNITION"
+        tools:targetApi="29" />
+
+    <!-- Permiso interno que usa Play Services para Activity Recognition -->
+    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION" />
 
     <application
         android:usesCleartextTraffic="true"
@@ -17,6 +28,17 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Senderos"
         tools:targetApi="31">
+
+        <!-- Receiver para recibir los broadcasts de ActivityRecognition -->
+        <receiver
+            android:name=".ui.screens.ActivityUpdatesReceiver"
+            android:exported="true"
+            android:permission="com.google.android.gms.permission.ACTIVITY_RECOGNITION">
+            <intent-filter>
+                <action android:name="com.example.senderos.ACTION_ACTIVITY_UPDATES"/>
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -24,10 +46,9 @@
             android:theme="@style/Theme.Senderos">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-    </application>
 
+    </application>
 </manifest>

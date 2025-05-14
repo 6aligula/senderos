@@ -1,7 +1,11 @@
 package com.example.senderos.ui.screens
 
 import android.Manifest
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.view.MotionEvent
 import androidx.compose.foundation.background
@@ -9,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -17,165 +22,197 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
+import androidx.core.content.ContextCompat.RECEIVER_EXPORTED
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.android.gms.location.*
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
-import androidx.compose.foundation.layout.systemBarsPadding
-//Asegúrate de importar el ViewModel correcto
-import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 fun MapScreen(
     mapViewModel: MapViewModel = viewModel()
 ) {
     val context = LocalContext.current
+
+    // 1) Permisos
+    val hasLocationPermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+
+    val hasActivityPermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.ACTIVITY_RECOGNITION
+    ) == PackageManager.PERMISSION_GRANTED
+
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-    // Estado para almacenar la ubicación actual
-    val currentLocation = remember { mutableStateOf<GeoPoint?>(null) }
-    // Referencias para actualizar el MapView y el Marker
+    // 2) Estado local de ubicación
+    val currentLocationState = remember { mutableStateOf<GeoPoint?>(null) }
+
+    // 3) Estado de actividad desde el ViewModel
+    val currentActivity by mapViewModel.currentActivity.collectAsState()
+
+    // 4) Referencias de mapa y marcador
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
-    val markerRef = remember { mutableStateOf<Marker?>(null) }
-    // Estado para saber si debemos centrar el mapa automáticamente
+    val markerRef  = remember { mutableStateOf<Marker?>(null) }
+
+    // 5) Control de centrado automático
     var shouldFollowLocation by remember { mutableStateOf(true) }
 
-    // Verificar permisos de ubicación
-    val hasLocationPermission = ContextCompat.checkSelfPermission(
-        context,
-        Manifest.permission.ACCESS_FINE_LOCATION
-    ) == PackageManager.PERMISSION_GRANTED ||
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.ACCESS_COARSE_LOCATION
-            ) == PackageManager.PERMISSION_GRANTED
+    // 6) Configurar PendingIntent para recibir ActivityUpdates
+    val activityIntent = remember {
+        Intent(context, ActivityUpdatesReceiver::class.java)
+            .apply { action = ActivityUpdatesReceiver.ACTION }
+            .let { intent ->
+                PendingIntent.getBroadcast(
+                    context, 0, intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            }
+    }
 
-    // Usamos un Box para superponer el mapa, el panel fijo superior y el botón
+    // 7) Solicitar Activity Recognition solo si tenemos permiso
+    DisposableEffect(hasActivityPermission) {
+        if (hasActivityPermission) {
+            val client = ActivityRecognition.getClient(context)
+            client.requestActivityUpdates(5_000L, activityIntent)
+            onDispose { client.removeActivityUpdates(activityIntent) }
+        } else {
+            onDispose { }
+        }
+    }
+
+    // 8) Capturar el broadcast y pasarlo al ViewModel
+    DisposableEffect(context) {
+        val filter = IntentFilter(ActivityUpdatesReceiver.ACTION)
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                if (ActivityRecognitionResult.hasResult(intent)) {
+                    val result = ActivityRecognitionResult.extractResult(intent)!!
+                    mapViewModel.onActivityRecognitionResult(result)
+                }
+            }
+        }
+        // Ahora con flag explícito para Android 14+
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            filter,
+            RECEIVER_EXPORTED
+        )
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
     Box(
-        modifier = Modifier
+        Modifier
             .fillMaxSize()
-            .systemBarsPadding() // Respeta la zona segura del dispositivo
+            .systemBarsPadding()
     ) {
-        // MapView ocupa toda la pantalla
+        // --- MapView ---
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                // Cargar la configuración de osmdroid
-                Configuration.getInstance().load(
-                    ctx,
-                    ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE)
-                )
-                // Crear y configurar el MapView
-                val mapView = MapView(ctx).apply {
-                    setTileSource(TileSourceFactory.MAPNIK)
-                    setMultiTouchControls(true)
-                    controller.setZoom(18.0)
-                }
-                // Detectamos si el usuario toca el mapa para desactivar el centrado automático
-                mapView.setOnTouchListener { _, event ->
-                    if (event.action == MotionEvent.ACTION_DOWN) {
-                        shouldFollowLocation = false
+                Configuration.getInstance()
+                    .load(ctx, ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+                MapView(ctx).also { map ->
+                    map.setTileSource(TileSourceFactory.MAPNIK)
+                    map.setMultiTouchControls(true)
+                    map.controller.setZoom(18.0)
+                    map.setOnTouchListener { v, ev ->
+                        if (ev.action == MotionEvent.ACTION_DOWN) {
+                            shouldFollowLocation = false
+                            v.performClick()
+                        }
+                        false
                     }
-                    false // Permitir que el MapView maneje el evento
-                }
-                mapViewRef.value = mapView
+                    mapViewRef.value = map
 
-                // Crear un Marker para la ubicación actual
-                val marker = Marker(mapView).apply {
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                    position = GeoPoint(0.0, 0.0) // Posición inicial (se actualizará)
+                    Marker(map).apply {
+                        setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                        position = GeoPoint(0.0, 0.0)
+                    }.also { marker ->
+                        map.overlays.add(marker)
+                        markerRef.value = marker
+                    }
                 }
-                mapView.overlays.add(marker)
-                markerRef.value = marker
-
-                mapView
             }
         )
 
-        // Panel fijo en la parte superior para mostrar las coordenadas
-        Box(
-            modifier = Modifier
+        // --- Panel superior: coordenadas + actividad ---
+        Column(
+            Modifier
                 .fillMaxWidth()
-                .height(80.dp)
                 .background(Color.DarkGray.copy(alpha = 0.8f))
-                .align(Alignment.TopCenter),
-            contentAlignment = Alignment.Center
+                .padding(8.dp)
+                .align(Alignment.TopCenter)
         ) {
             if (!hasLocationPermission) {
                 Text(
                     text = "Permiso de ubicación no concedido",
-                    color = Color.White,
-                    fontSize = 20.sp
+                    color = Color.White, fontSize = 18.sp
                 )
             } else {
-                currentLocation.value?.let { loc ->
+                currentLocationState.value?.let {
                     Text(
-                        text = "Lat: ${loc.latitude}, Lon: ${loc.longitude}",
-                        color = Color.White,
-                        fontSize = 20.sp
+                        text = "Lat: ${it.latitude}, Lon: ${it.longitude}",
+                        color = Color.White, fontSize = 18.sp
                     )
                 } ?: Text(
-                    text = "Buscando ubicación...",
-                    color = Color.LightGray,
-                    fontSize = 20.sp
+                    text = "Buscando ubicación…",
+                    color = Color.LightGray, fontSize = 18.sp
                 )
             }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Actividad: $currentActivity",
+                color = Color.White, fontSize = 18.sp
+            )
         }
 
-        // Botón fijo en la esquina inferior derecha para recenterar el mapa a la ubicación actual
+        // --- Botón para centrar ---
         Button(
             onClick = {
                 shouldFollowLocation = true
-                currentLocation.value?.let { loc ->
-                    mapViewRef.value?.controller?.animateTo(loc)
+                currentLocationState.value?.let {
+                    mapViewRef.value?.controller?.animateTo(it)
                 }
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
         ) {
-            Text(text = "Ubi. actual")
+            Text("Ubi. actual")
         }
     }
 
-    // Solicitar actualizaciones de ubicación cada 5 segundos (si hay permisos)
-    DisposableEffect(key1 = context) {
+    // 9) Location updates
+    DisposableEffect(hasLocationPermission) {
         if (hasLocationPermission) {
-            val locationRequest = LocationRequest.create().apply {
-                interval = 5000L       // 5 segundos
-                fastestInterval = 2000L  // Mínimo cada 2 segundos
-                priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-            }
+            val locationRequest = LocationRequest.Builder(5_000L)
+                .setMinUpdateIntervalMillis(2_000L)
+                .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                .build()
+
             val locationCallback = object : LocationCallback() {
-                override fun onLocationResult(locationResult: LocationResult) {
-                    val location = locationResult.lastLocation ?: return
-
-                    // ② Llama al método de la INSTANCIA, no a la clase
-                    mapViewModel.onLocationChanged(location.latitude, location.longitude)
-
-                    // ③ Resto de la lógica de UI
-                    val geoPoint = GeoPoint(location.latitude, location.longitude)
-                    currentLocation.value = geoPoint
+                override fun onLocationResult(result: LocationResult) {
+                    val loc = result.lastLocation ?: return
+                    // 9.1 Actualiza ViewModel
+                    mapViewModel.onLocationChanged(loc.latitude, loc.longitude)
+                    // 9.2 Actualiza UI local
+                    val point = GeoPoint(loc.latitude, loc.longitude)
+                    currentLocationState.value = point
                     if (shouldFollowLocation) {
-                        mapViewRef.value?.controller?.animateTo(geoPoint)
+                        mapViewRef.value?.controller?.animateTo(point)
                     }
-                    markerRef.value?.position = geoPoint
+                    markerRef.value?.position = point
                     mapViewRef.value?.invalidate()
                 }
             }
-            try {
-                fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
-            } catch (ex: SecurityException) {
-                // Manejo de excepción si faltan permisos
-            }
-            onDispose {
-                fusedLocationClient.removeLocationUpdates(locationCallback)
-            }
+
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null)
+            onDispose { fusedLocationClient.removeLocationUpdates(locationCallback) }
         } else {
             onDispose { }
         }
