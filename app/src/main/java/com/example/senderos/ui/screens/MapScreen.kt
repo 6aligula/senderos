@@ -95,7 +95,6 @@ fun MapScreen(
                 }
             }
         }
-        // Ahora con flag explícito para Android 14+
         ContextCompat.registerReceiver(
             context,
             receiver,
@@ -193,11 +192,14 @@ fun MapScreen(
             val locationRequest = LocationRequest.Builder(5_000L)
                 .setMinUpdateIntervalMillis(2_000L)
                 .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+                .setMinUpdateDistanceMeters(5f)   // ← añadido: sólo dispara si cambias ≥5 m
                 .build()
 
             val locationCallback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
                     val loc = result.lastLocation ?: return
+                    if (loc.accuracy > 10f) return       // ← añadido: descarta precisiones >10 m
+
                     // 9.1 Actualiza ViewModel
                     mapViewModel.onLocationChanged(loc.latitude, loc.longitude)
                     // 9.2 Actualiza UI local

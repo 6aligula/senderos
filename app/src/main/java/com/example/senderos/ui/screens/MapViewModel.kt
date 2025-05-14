@@ -20,7 +20,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val _current = MutableStateFlow<LocationRequest?>(null)
     val current = _current.asStateFlow()
 
-    private val MIN_DISTANCE_M = 20      // no spamear
+    private val MIN_DISTANCE_M = 5.0
     private var lastSent: LocationRequest? = null
 
     // —— Estado de actividad ——
@@ -40,9 +40,12 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             lon       = newLon,
             timestamp = System.currentTimeMillis()
         )
+
+        // mantenemos la actualización del state original
         _current.value = payload
 
-        if (shouldUpload(payload)) {
+        // ⬅️ Aquí, comparamos .value en lugar del flujo entero
+        if (_currentActivity.value != UserActivity.STILL && shouldUpload(payload)) {
             lastSent = payload
             viewModelScope.launch {
                 LocationSenderWorker.schedule(getApplication(), payload)
@@ -75,9 +78,6 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     // —— Nueva lógica: clasificación de actividad ——
 
-    /**
-     * Traduce el código de DetectedActivity a nuestro enum UserActivity.
-     */
     fun classifyActivity(type: Int): UserActivity = when (type) {
         DetectedActivity.STILL      -> UserActivity.STILL
         DetectedActivity.WALKING    -> UserActivity.WALKING
@@ -86,12 +86,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         else                        -> UserActivity.UNKNOWN
     }
 
-    /**
-     * Recibe el resultado de la API de ActivityRecognition
-     * y actualiza el estado de currentActivity.
-     */
     fun onActivityRecognitionResult(result: ActivityRecognitionResult) {
-        // Escoge la actividad con mayor confianza
         val mostLikely = result.probableActivities
             .maxByOrNull { it.confidence }
             ?: return
