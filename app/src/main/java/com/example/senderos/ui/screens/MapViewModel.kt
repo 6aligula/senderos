@@ -6,6 +6,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.senderos.model.LocationRequest
 import com.example.senderos.model.UserActivity
+import com.example.senderos.network.LocationClient       // 🆕
 import com.example.senderos.utils.LocationSenderWorker
 import com.google.android.gms.location.ActivityRecognitionResult
 import com.google.android.gms.location.DetectedActivity
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlin.math.*
 
+//────────────────────────── EXISTENTE ──────────────────────────
 class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     // —— Estado de ubicación ——
@@ -29,22 +31,15 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lógica previa: cuando cambia la ubicación */
     fun onLocationChanged(newLat: Double, newLon: Double) {
-        val devId = Settings.Secure.getString(
-            getApplication<Application>().contentResolver,
-            Settings.Secure.ANDROID_ID
-        )
-
         val payload = LocationRequest(
-            device_id = devId,
+            device_id = deviceId(),           // ⬅️ helper reutilizado
             lat       = newLat,
             lon       = newLon,
             timestamp = System.currentTimeMillis()
         )
 
-        // mantenemos la actualización del state original
         _current.value = payload
 
-        // ⬅️ Aquí, comparamos .value en lugar del flujo entero
         if (_currentActivity.value != UserActivity.STILL && shouldUpload(payload)) {
             lastSent = payload
             viewModelScope.launch {
@@ -53,14 +48,12 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Decide si enviar al servidor según distancia mínima */
     private fun shouldUpload(now: LocationRequest): Boolean {
         val prev = lastSent ?: return true
         val dist = haversine(prev.lat, prev.lon, now.lat, now.lon)
         return dist >= MIN_DISTANCE_M
     }
 
-    /** Distancia Haversine en metros */
     private fun haversine(
         lat1: Double, lon1: Double,
         lat2: Double, lon2: Double
@@ -77,7 +70,6 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // —— Nueva lógica: clasificación de actividad ——
-
     fun classifyActivity(type: Int): UserActivity = when (type) {
         DetectedActivity.STILL      -> UserActivity.STILL
         DetectedActivity.WALKING    -> UserActivity.WALKING
@@ -88,9 +80,55 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     fun onActivityRecognitionResult(result: ActivityRecognitionResult) {
         val mostLikely = result.probableActivities
-            .maxByOrNull { it.confidence }
-            ?: return
+            .maxByOrNull { it.confidence } ?: return
 
         _currentActivity.value = classifyActivity(mostLikely.type)
     }
+
+    //────────────────────────── NUEVO ──────────────────────────
+    // ——— Track guardado en Firestore ———
+    private val _trackPoints = MutableStateFlow<List<Pair<Double, Double>>?>(null)
+    val trackPoints = _trackPoints.asStateFlow()
+
+    // ——— Ruta “snap-to-road” devuelta por el backend ———
+    private val _routePoints = MutableStateFlow<List<Pair<Double, Double>>?>(null)
+    val routePoints = _routePoints.asStateFlow()
+
+    /** Descarga el track completo del dispositivo y lo expone en `trackPoints` */
+    fun fetchTrack() {
+        viewModelScope.launch {
+            _trackPoints.value = LocationClient.getTrack(deviceId())
+        }
+    }
+
+    /**
+     * Calcula la ruta óptima desde la ubicación actual hasta [target] y la expone en `routePoints`.
+     * @param target par (lat, lon) destino.
+     * @param profile "foot-walking", "driving-car", etc.
+     */
+    fun fetchRouteTo(
+        target: Pair<Double, Double>,
+        profile: String = "foot-walking"
+    ) {
+        val start = _current.value ?: return      // aún sin ubicación
+        viewModelScope.launch {
+            _routePoints.value = LocationClient.getRoute(
+                start = start.lat to start.lon,
+                end   = target,
+                profile = profile
+            )
+        }
+    }
+
+    /** Limpia la ruta calculada (p.e. al cancelar navegación) */
+    fun clearRoute() {
+        _routePoints.value = null
+    }
+
+    // ——— Helper reutilizado ———
+    private fun deviceId(): String =
+        Settings.Secure.getString(
+            getApplication<Application>().contentResolver,
+            Settings.Secure.ANDROID_ID
+        )
 }

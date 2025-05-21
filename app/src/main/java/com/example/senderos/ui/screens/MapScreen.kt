@@ -30,6 +30,8 @@ import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline          // ← NUEVO
+import android.graphics.Color as AndroidColor     // para el Polyline
 
 @Composable
 fun MapScreen(
@@ -37,7 +39,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
 
-    // 1) Permisos
+    // 1) Permisos -----------------------------------------------------------
     val hasLocationPermission = ContextCompat.checkSelfPermission(
         context, Manifest.permission.ACCESS_FINE_LOCATION
     ) == PackageManager.PERMISSION_GRANTED
@@ -48,20 +50,22 @@ fun MapScreen(
 
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-    // 2) Estado local de ubicación
+    // 2) Estado local de ubicación -----------------------------------------
     val currentLocationState = remember { mutableStateOf<GeoPoint?>(null) }
 
-    // 3) Estado de actividad desde el ViewModel
-    val currentActivity by mapViewModel.currentActivity.collectAsState()
+    // 3) Estados del ViewModel ---------------------------------------------
+    val currentActivity  by mapViewModel.currentActivity.collectAsState()
+    val trackPointsState by mapViewModel.trackPoints.collectAsState()   // ← NUEVO
 
-    // 4) Referencias de mapa y marcador
+    // 4) Referencias de mapa, marcador y polyline --------------------------
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
     val markerRef  = remember { mutableStateOf<Marker?>(null) }
+    val trackRef   = remember { mutableStateOf<Polyline?>(null) }       // ← NUEVO
 
-    // 5) Control de centrado automático
+    // 5) Control de centrado automático ------------------------------------
     var shouldFollowLocation by remember { mutableStateOf(true) }
 
-    // 6) Configurar PendingIntent para recibir ActivityUpdates
+    // 6) PendingIntent para Activity Updates -------------------------------
     val activityIntent = remember {
         Intent(context, ActivityUpdatesReceiver::class.java)
             .apply { action = ActivityUpdatesReceiver.ACTION }
@@ -73,7 +77,7 @@ fun MapScreen(
             }
     }
 
-    // 7) Solicitar Activity Recognition solo si tenemos permiso
+    // 7) Solicitar reconocimiento de actividad -----------------------------
     DisposableEffect(hasActivityPermission) {
         if (hasActivityPermission) {
             val client = ActivityRecognition.getClient(context)
@@ -84,7 +88,7 @@ fun MapScreen(
         }
     }
 
-    // 8) Capturar el broadcast y pasarlo al ViewModel
+    // 8) Capturar el broadcast y pasarlo al ViewModel ----------------------
     DisposableEffect(context) {
         val filter = IntentFilter(ActivityUpdatesReceiver.ACTION)
         val receiver = object : BroadcastReceiver() {
@@ -104,12 +108,13 @@ fun MapScreen(
         onDispose { context.unregisterReceiver(receiver) }
     }
 
+    // ============================= UI =====================================
     Box(
         Modifier
             .fillMaxSize()
             .systemBarsPadding()
     ) {
-        // --- MapView ---
+        // --- MapView -------------------------------------------------------
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -128,6 +133,7 @@ fun MapScreen(
                     }
                     mapViewRef.value = map
 
+                    // — marcador de ubicación actual —
                     Marker(map).apply {
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         position = GeoPoint(0.0, 0.0)
@@ -135,11 +141,19 @@ fun MapScreen(
                         map.overlays.add(marker)
                         markerRef.value = marker
                     }
+
+                    // — polyline del track (vacía al inicio) — ← NUEVO
+                    Polyline(map).also { poly ->
+                        poly.outlinePaint.strokeWidth = 6f
+                        poly.outlinePaint.color = AndroidColor.MAGENTA
+                        map.overlays.add(poly)
+                        trackRef.value = poly
+                    }
                 }
             }
         )
 
-        // --- Panel superior: coordenadas + actividad ---
+        // --- Panel superior -----------------------------------------------
         Column(
             Modifier
                 .fillMaxWidth()
@@ -170,7 +184,7 @@ fun MapScreen(
             )
         }
 
-        // --- Botón para centrar ---
+        // --- Botón “Ubi. actual” ------------------------------------------
         Button(
             onClick = {
                 shouldFollowLocation = true
@@ -184,25 +198,36 @@ fun MapScreen(
         ) {
             Text("Ubi. actual")
         }
+
+        // --- Botón NUEVO: “Pedir track” -----------------------------------
+        Button(
+            onClick = { mapViewModel.fetchTrack() },
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .padding(16.dp)
+        ) {
+            Text("Pedir track")
+        }
     }
 
-    // 9) Location updates
+    // 9) Location updates --------------------------------------------------
     DisposableEffect(hasLocationPermission) {
         if (hasLocationPermission) {
             val locationRequest = LocationRequest.Builder(5_000L)
                 .setMinUpdateIntervalMillis(2_000L)
                 .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
-                .setMinUpdateDistanceMeters(5f)   // ← añadido: sólo dispara si cambias ≥5 m
+                .setMinUpdateDistanceMeters(5f)
                 .build()
 
             val locationCallback = object : LocationCallback() {
                 override fun onLocationResult(result: LocationResult) {
                     val loc = result.lastLocation ?: return
-                    if (loc.accuracy > 10f) return       // ← añadido: descarta precisiones >10 m
+                    if (loc.accuracy > 10f) return
 
-                    // 9.1 Actualiza ViewModel
+                    // 9.1 ViewModel
                     mapViewModel.onLocationChanged(loc.latitude, loc.longitude)
-                    // 9.2 Actualiza UI local
+
+                    // 9.2 UI local
                     val point = GeoPoint(loc.latitude, loc.longitude)
                     currentLocationState.value = point
                     if (shouldFollowLocation) {
@@ -218,5 +243,15 @@ fun MapScreen(
         } else {
             onDispose { }
         }
+    }
+
+    // 10) Redibujar el track cuando cambie --------------------------------- ← NUEVO
+    LaunchedEffect(trackPointsState) {
+        val pts = trackPointsState ?: return@LaunchedEffect
+        if (pts.isEmpty()) return@LaunchedEffect
+
+        val geo = pts.map { (lat, lon) -> GeoPoint(lat, lon) }
+        trackRef.value?.setPoints(geo)
+        mapViewRef.value?.invalidate()
     }
 }
