@@ -6,7 +6,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.senderos.model.LocationRequest
 import com.example.senderos.model.UserActivity
+import com.example.senderos.model.RouteSummary
 import com.example.senderos.network.LocationClient
+import com.example.senderos.network.RoutesClient
 import com.example.senderos.utils.LocationSenderWorker
 import com.google.android.gms.location.ActivityRecognitionResult
 import com.google.android.gms.location.DetectedActivity
@@ -29,7 +31,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     val currentActivity = _currentActivity.asStateFlow()
 
     //-----------------------------------------------------------------------
-    // 1.  UPLOAD de posición (igual que antes)
+    // 1. UPLOAD de posición
     //-----------------------------------------------------------------------
     fun onLocationChanged(newLat: Double, newLon: Double) {
         val payload = LocationRequest(
@@ -47,11 +49,13 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
             }
         }
     }
+
     private fun shouldUpload(now: LocationRequest): Boolean {
         val prev = lastSent ?: return true
         val dist = haversine(prev.lat, prev.lon, now.lat, now.lon)
         return dist >= MIN_DISTANCE_M
     }
+
     private fun haversine(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
         val R = 6_371_000.0
         val dLat = Math.toRadians(lat2 - lat1)
@@ -65,7 +69,7 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     //-----------------------------------------------------------------------
-    // 2.  Clasificación de actividad (sin cambios)
+    // 2. Clasificación de actividad
     //-----------------------------------------------------------------------
     fun classifyActivity(type: Int): UserActivity = when (type) {
         DetectedActivity.STILL      -> UserActivity.STILL
@@ -74,13 +78,14 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         DetectedActivity.IN_VEHICLE -> UserActivity.IN_VEHICLE
         else                        -> UserActivity.UNKNOWN
     }
+
     fun onActivityRecognitionResult(result: ActivityRecognitionResult) {
         val mostLikely = result.probableActivities.maxByOrNull { it.confidence } ?: return
         _currentActivity.value = classifyActivity(mostLikely.type)
     }
 
     //-----------------------------------------------------------------------
-    // 3.  Track propio (ya lo tenías)
+    // 3. Track propio
     //-----------------------------------------------------------------------
     private val _trackPoints = MutableStateFlow<List<Pair<Double, Double>>?>(null)
     val trackPoints = _trackPoints.asStateFlow()
@@ -90,25 +95,32 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     //-----------------------------------------------------------------------
-    // 4.  LISTA de rutas + puntos de la ruta seleccionada (NUEVO)
+    // 4. Lista de rutas + puntos de ruta seleccionada
     //-----------------------------------------------------------------------
     private val _routes = MutableStateFlow<List<String>>(emptyList())
     val routes = _routes.asStateFlow()
 
+    /**
+     * Descarga la lista de rutas (IDs) para el desplegable.
+     */
+    fun fetchRoutesList() = viewModelScope.launch {
+        val summaries: List<RouteSummary> = RoutesClient.getRoutesList()
+        _routes.value = summaries.map { it.id }
+    }
+
     private val _selectedRoutePoints = MutableStateFlow<List<Pair<Double, Double>>?>(null)
     val selectedRoutePoints = _selectedRoutePoints.asStateFlow()
 
-    /** Descarga la lista de rutas disponibles */
-    fun fetchRoutesList() = viewModelScope.launch {
-        _routes.value = LocationClient.getRoutesList()
-    }
-
-    /** Descarga los puntos de la ruta seleccionada y los expone */
+    /**
+     * Descarga y expone los puntos de la ruta seleccionada.
+     */
     fun fetchRouteById(id: String) = viewModelScope.launch {
         _selectedRoutePoints.value = LocationClient.getRouteById(id)
     }
 
-    fun clearSelectedRoute() { _selectedRoutePoints.value = null }
+    fun clearSelectedRoute() {
+        _selectedRoutePoints.value = null
+    }
 
     //-----------------------------------------------------------------------
     // Helper
