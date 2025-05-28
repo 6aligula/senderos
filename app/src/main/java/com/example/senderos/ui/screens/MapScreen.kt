@@ -34,6 +34,7 @@ import com.example.senderos.model.UserActivity
 import com.google.android.gms.location.*
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -48,23 +49,17 @@ fun MapScreen(
     val context = LocalContext.current
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-    // 1) Pedimos permisos usando composables
-    RequestLocationPermission(
-        onGranted = { /* lógica de ubicación opcional */ },
-        onDenied = { /* UI explicativa */ }
-    )
-    RequestActivityPermission(
-        onGranted = { /* lógica de actividad opcional */ },
-        onDenied = { /* UI explicativa */ }
-    )
+    // 1) Permisos
+    RequestLocationPermission(onGranted = {}, onDenied = {})
+    RequestActivityPermission(onGranted = {}, onDenied = {})
 
-    // 2) Estados del ViewModel
+    // 2) Estados
     val currentActivity by mapViewModel.currentActivity.collectAsState(initial = UserActivity.UNKNOWN)
     val trackPointsState by mapViewModel.trackPoints.collectAsState(initial = null)
     val routesListState by mapViewModel.routes.collectAsState(initial = emptyList())
     val selectedRoutePoints by mapViewModel.selectedRoutePoints.collectAsState(initial = null)
 
-    // 3) Estados locales para mapa
+    // 3) Estado local mapa
     var shouldFollowLocation by remember { mutableStateOf(true) }
     val currentLocationState = remember { mutableStateOf<GeoPoint?>(null) }
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
@@ -72,7 +67,7 @@ fun MapScreen(
     val trackRef = remember { mutableStateOf<Polyline?>(null) }
     val routeRef = remember { mutableStateOf<Polyline?>(null) }
 
-    // 4) Configurar ActivityRecognition
+    // 4) ActivityRecognition (igual que antes)...
     val activityIntent = remember {
         Intent(context, ActivityUpdatesReceiver::class.java).apply { action = ActivityUpdatesReceiver.ACTION }
             .let { intent ->
@@ -89,8 +84,6 @@ fun MapScreen(
             onDispose { client.removeActivityUpdates(activityIntent) }
         } else onDispose { }
     }
-
-    // 5) Receiver interno de ActivityRecognition
     DisposableEffect(context) {
         val filter = IntentFilter(ActivityUpdatesReceiver.ACTION)
         val receiver = object : BroadcastReceiver() {
@@ -105,7 +98,7 @@ fun MapScreen(
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // 6) Carga inicial de rutas
+    // 5) Carga inicial de rutas
     LaunchedEffect(Unit) { mapViewModel.fetchRoutesList() }
 
     // UI principal
@@ -117,7 +110,8 @@ fun MapScreen(
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                Configuration.getInstance().load(ctx, ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+                Configuration.getInstance()
+                    .load(ctx, ctx.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
                 MapView(ctx).apply {
                     setTileSource(TileSourceFactory.MAPNIK)
                     setMultiTouchControls(true)
@@ -153,6 +147,7 @@ fun MapScreen(
             }
         )
 
+        // Cabecera con ubicación y actividad
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -167,16 +162,20 @@ fun MapScreen(
             Text("Actividad: $currentActivity", color = Color.White, fontSize = 18.sp)
         }
 
+        // Botón “Ubi. actual”
         Button(
             onClick = {
                 shouldFollowLocation = true
                 currentLocationState.value?.let { mapViewRef.value?.controller?.animateTo(it) }
             },
-            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
         ) {
             Text("Ubi. actual")
         }
 
+        // Selector de rutas
         var expanded by remember { mutableStateOf(false) }
         Box(modifier = Modifier.align(Alignment.BottomStart).padding(16.dp)) {
             Button(onClick = { expanded = true }) { Text("Rutas") }
@@ -194,7 +193,7 @@ fun MapScreen(
         }
     }
 
-    // 7) Location updates
+    // 6) Location updates
     DisposableEffect(LocationPermissionHelper.hasLocationPermission(context)) {
         if (LocationPermissionHelper.hasLocationPermission(context)) {
             val request = LocationRequest.Builder(5000L)
@@ -219,7 +218,7 @@ fun MapScreen(
         } else onDispose { }
     }
 
-    // 8) Redibujar track
+    // 7) Dibujar track
     LaunchedEffect(trackPointsState) {
         trackPointsState?.let { pts ->
             trackRef.value?.setPoints(pts.map { GeoPoint(it.first, it.second) })
@@ -227,11 +226,26 @@ fun MapScreen(
         }
     }
 
-    // 9) Redibujar ruta
+    // 8) Dibujar ruta y hacer zoom a sus bounds
     LaunchedEffect(selectedRoutePoints) {
         selectedRoutePoints?.let { pts ->
-            routeRef.value?.setPoints(pts.map { GeoPoint(it.first, it.second) })
+            // Pintar polyline
+            val geoPts = pts.map { GeoPoint(it.first, it.second) }
+            routeRef.value?.setPoints(geoPts)
             mapViewRef.value?.invalidate()
+
+            // Hacer zoom al bounding box de la ruta
+            mapViewRef.value?.let { map ->
+                val lats = pts.map { it.first }
+                val lons = pts.map { it.second }
+                val north = lats.maxOrNull() ?: return@let
+                val south = lats.minOrNull() ?: return@let
+                val east  = lons.maxOrNull() ?: return@let
+                val west  = lons.minOrNull() ?: return@let
+
+                val bbox = BoundingBox(north, east, south, west)
+                map.zoomToBoundingBox(bbox, /* animate = */ true)
+            }
         }
     }
 }

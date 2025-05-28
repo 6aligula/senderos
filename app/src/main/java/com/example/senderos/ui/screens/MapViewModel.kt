@@ -6,7 +6,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.senderos.model.LocationRequest
 import com.example.senderos.model.UserActivity
-import com.example.senderos.model.RouteSummary
 import com.example.senderos.network.LocationClient
 import com.example.senderos.network.RoutesClient
 import com.example.senderos.utils.LocationSenderWorker
@@ -100,20 +99,13 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val _routes = MutableStateFlow<List<String>>(emptyList())
     val routes = _routes.asStateFlow()
 
-    /**
-     * Descarga la lista de rutas (IDs) para el desplegable.
-     */
     fun fetchRoutesList() = viewModelScope.launch {
-        val summaries: List<RouteSummary> = RoutesClient.getRoutesList()
-        _routes.value = summaries.map { it.id }
+        _routes.value = RoutesClient.getRoutesList().map { it.id }
     }
 
     private val _selectedRoutePoints = MutableStateFlow<List<Pair<Double, Double>>?>(null)
     val selectedRoutePoints = _selectedRoutePoints.asStateFlow()
 
-    /**
-     * Descarga y expone los puntos de la ruta seleccionada.
-     */
     fun fetchRouteById(id: String) = viewModelScope.launch {
         _selectedRoutePoints.value = LocationClient.getRouteById(id)
     }

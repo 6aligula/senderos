@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
 
 object LocationClient {
 
-    private const val BASE_URL = BuildConfig.SERVER_IP   // gradleField existente ✅
+    private const val BASE_URL = BuildConfig.SERVER_IP
 
     // ────────────────────────── HTTP client común ──────────────────────────
     private val client = HttpClient(CIO) {
@@ -35,7 +35,8 @@ object LocationClient {
         }
         r.status == HttpStatusCode.Created
     } catch (e: Exception) {
-        e.printStackTrace(); false
+        e.printStackTrace()
+        false
     }
 
     // ─────────────────────── 2) Track de ESTE dispositivo ─────────────────
@@ -45,14 +46,20 @@ object LocationClient {
             .body()
         resp.locations.map { it.lat to it.lon }
     } catch (e: Exception) {
-        e.printStackTrace(); emptyList()
+        e.printStackTrace()
+        emptyList()
     }
 
-    // DTOs para LocationOut -------------------------------------------------
-    @Serializable private data class LocationOutDTO(
+    // DTOs para getTrack
+    @Serializable
+    private data class LocationOutDTO(
         val locations: List<LocationEntryDTO> = emptyList()
     )
-    @Serializable private data class LocationEntryDTO(val lat: Double, val lon: Double)
+    @Serializable
+    private data class LocationEntryDTO(
+        val lat: Double,
+        val lon: Double
+    )
 
     // ────────────────── 3) Ruta “snap-to-road” genérica ───────────────────
     suspend fun getRoute(
@@ -72,28 +79,44 @@ object LocationClient {
             ?.geometry?.coordinates
             ?.map { (lon, lat) -> lat to lon } ?: emptyList()
     } catch (e: Exception) {
-        e.printStackTrace(); emptyList()
+        e.printStackTrace()
+        emptyList()
     }
+
+    // DTOs para GeoJSON (solo si sigues usando este endpoint)
+    @Serializable private data class GeoJsonDTO(val features: List<FeatureDTO>)
+    @Serializable private data class FeatureDTO(val geometry: GeometryDTO)
+    @Serializable private data class GeometryDTO(val coordinates: List<List<Double>>)  // [lon, lat]
 
     // ─────────────────────── 4) LISTA de rutas guardadas ──────────────────
     suspend fun getRoutesList(): List<String> = try {
-        client.get("$BASE_URL/routes").body()      // ← espera ["uuid1","uuid2",…]
+        client.get("$BASE_URL/routes").body()
     } catch (e: Exception) {
-        e.printStackTrace(); emptyList()
+        e.printStackTrace()
+        emptyList()
     }
 
     // ───────────────────── 5) Puntos de una ruta por ID ───────────────────
     suspend fun getRouteById(id: String): List<Pair<Double, Double>> = try {
-        val g: GeoJsonDTO = client.get("$BASE_URL/routes/$id").body()
-        g.features.firstOrNull()
-            ?.geometry?.coordinates
-            ?.map { (lon, lat) -> lat to lon } ?: emptyList()
+        val resp: RouteOutDTO = client
+            .get("$BASE_URL/routes/$id")
+            .body()
+        // Aquí mapeamos directamente el array "points" que devuelve tu backend
+        resp.points.map { it.lat to it.lon }
     } catch (e: Exception) {
-        e.printStackTrace(); emptyList()
+        e.printStackTrace()
+        emptyList()
     }
 
-    // DTO para GeoJSON ------------------------------------------------------
-    @Serializable private data class GeoJsonDTO(val features: List<FeatureDTO>)
-    @Serializable private data class FeatureDTO(val geometry: GeometryDTO)
-    @Serializable private data class GeometryDTO(val coordinates: List<List<Double>>)  // [lon, lat]
+    // DTOs para getRouteById
+    @Serializable
+    private data class RouteOutDTO(
+        val points: List<PointDTO> = emptyList()
+    )
+    @Serializable
+    private data class PointDTO(
+        val lat: Double,
+        val lon: Double
+        // Puedes añadir timestamp, accuracy, altitude… si los necesitas
+    )
 }
