@@ -116,6 +116,8 @@ fun MapScreen(
                     setTileSource(TileSourceFactory.MAPNIK)
                     setMultiTouchControls(true)
                     controller.setZoom(18.0)
+
+                    // Desactiva seguimiento si se toca el mapa
                     setOnTouchListener { v, ev ->
                         if (ev.action == MotionEvent.ACTION_DOWN) {
                             shouldFollowLocation = false
@@ -123,13 +125,20 @@ fun MapScreen(
                         }
                         false
                     }
+
+                    // Guardamos referencia al MapView
                     mapViewRef.value = this
 
+                    // Creamos el Marker para la ubicación actual y lo añadimos a overlays
                     Marker(this).apply {
                         setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                         position = GeoPoint(0.0, 0.0)
-                    }.also { markerRef.value = it }
+                    }.also { marker ->
+                        markerRef.value = marker
+                        overlays.add(marker)
+                    }
 
+                    // Creamos Polyline para el track y lo añadimos a overlays
                     Polyline(this).also { poly ->
                         poly.outlinePaint.strokeWidth = 6f
                         poly.outlinePaint.color = AndroidColor.MAGENTA
@@ -137,6 +146,7 @@ fun MapScreen(
                         trackRef.value = poly
                     }
 
+                    // Creamos Polyline para la ruta y lo añadimos a overlays
                     Polyline(this).also { poly ->
                         poly.outlinePaint.strokeWidth = 8f
                         poly.outlinePaint.color = AndroidColor.CYAN
@@ -208,7 +218,13 @@ fun MapScreen(
                     mapViewModel.onLocationChanged(loc.latitude, loc.longitude)
                     val point = GeoPoint(loc.latitude, loc.longitude)
                     currentLocationState.value = point
-                    if (shouldFollowLocation) mapViewRef.value?.controller?.animateTo(point)
+
+                    // Si seguimos ubicación, centramos el mapa
+                    if (shouldFollowLocation) {
+                        mapViewRef.value?.controller?.animateTo(point)
+                    }
+
+                    // Actualizamos posición del marker y refrescamos el mapa
                     markerRef.value?.position = point
                     mapViewRef.value?.invalidate()
                 }
