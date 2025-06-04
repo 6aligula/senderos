@@ -32,6 +32,10 @@ import com.example.senderos.utils.ActivityPermissionHelper
 import com.example.senderos.utils.LocationPermissionHelper
 import com.example.senderos.model.UserActivity
 import com.google.android.gms.location.*
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
@@ -58,6 +62,7 @@ fun MapScreen(
     val trackPointsState by mapViewModel.trackPoints.collectAsState(initial = null)
     val routesListState by mapViewModel.routes.collectAsState(initial = emptyList())
     val selectedRoutePoints by mapViewModel.selectedRoutePoints.collectAsState(initial = null)
+    val stepCount by mapViewModel.stepCount.collectAsState(initial = 0)
 
     // 3) Estado local mapa
     var shouldFollowLocation by remember { mutableStateOf(true) }
@@ -100,6 +105,26 @@ fun MapScreen(
 
     // 5) Carga inicial de rutas
     LaunchedEffect(Unit) { mapViewModel.fetchRoutesList() }
+
+    // 6) Contador de pasos
+    DisposableEffect(Unit) {
+        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+        val listener = object : SensorEventListener {
+            private var initial: Float? = null
+            override fun onSensorChanged(event: SensorEvent) {
+                val value = event.values.firstOrNull() ?: return
+                if (initial == null) initial = value
+                val steps = (value - (initial ?: value)).toInt()
+                mapViewModel.updateStepCount(steps)
+            }
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+        if (stepSensor != null) {
+            sensorManager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_NORMAL)
+        }
+        onDispose { sensorManager.unregisterListener(listener) }
+    }
 
     // UI principal
     Box(
@@ -170,6 +195,8 @@ fun MapScreen(
             } ?: Text("Buscando ubicación…", color = Color.LightGray, fontSize = 18.sp)
             Spacer(Modifier.height(4.dp))
             Text("Actividad: $currentActivity", color = Color.White, fontSize = 18.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Pasos: $stepCount", color = Color.White, fontSize = 18.sp)
         }
 
         // Botón “Ubi. actual”
@@ -203,7 +230,7 @@ fun MapScreen(
         }
     }
 
-    // 6) Location updates
+    // 7) Location updates
     DisposableEffect(LocationPermissionHelper.hasLocationPermission(context)) {
         if (LocationPermissionHelper.hasLocationPermission(context)) {
             val request = LocationRequest.Builder(5000L)
@@ -234,7 +261,7 @@ fun MapScreen(
         } else onDispose { }
     }
 
-    // 7) Dibujar track
+    // 8) Dibujar track
     LaunchedEffect(trackPointsState) {
         trackPointsState?.let { pts ->
             trackRef.value?.setPoints(pts.map { GeoPoint(it.first, it.second) })
@@ -242,7 +269,7 @@ fun MapScreen(
         }
     }
 
-    // 8) Dibujar ruta y hacer zoom a sus bounds
+    // 9) Dibujar ruta y hacer zoom a sus bounds
     LaunchedEffect(selectedRoutePoints) {
         selectedRoutePoints?.let { pts ->
             // Pintar polyline

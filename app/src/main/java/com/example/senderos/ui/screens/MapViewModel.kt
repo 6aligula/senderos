@@ -29,6 +29,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     private val _currentActivity = MutableStateFlow(UserActivity.UNKNOWN)
     val currentActivity = _currentActivity.asStateFlow()
 
+    // —— Estado de pasos ——
+    private val _stepCount = MutableStateFlow(0)
+    val stepCount = _stepCount.asStateFlow()
+
     //-----------------------------------------------------------------------
     // 1. UPLOAD de posición
     //-----------------------------------------------------------------------
@@ -112,6 +116,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearSelectedRoute() {
         _selectedRoutePoints.value = null
+    }
+
+    fun updateStepCount(count: Int) {
+        _stepCount.value = count
     }
 
     //-----------------------------------------------------------------------
