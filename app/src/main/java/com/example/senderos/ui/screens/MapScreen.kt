@@ -46,6 +46,7 @@ import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import android.graphics.Color as AndroidColor
 private const val TAG_STEP = "StepSensor"
+private const val ACTION_ACTIVITY_UPDATES = "com.example.senderos.ACTION_ACTIVITY_UPDATES"
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -76,32 +77,47 @@ fun MapScreen(
     val routeRef = remember { mutableStateOf<Polyline?>(null) }
 
     // 4) ActivityRecognition (igual que antes)...
-    val activityIntent = remember {
-        Intent(context, ActivityUpdatesReceiver::class.java).apply { action = ActivityUpdatesReceiver.ACTION }
-            .let { intent ->
-                PendingIntent.getBroadcast(
-                    context, 0, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-            }
+    val activityPendingIntent = remember {
+        val intent = Intent(ACTION_ACTIVITY_UPDATES).apply {
+            // Limita el broadcast a *tu* paquete para que no sea global
+            `package` = context.packageName
+        }
+        PendingIntent.getBroadcast(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
     }
+
     DisposableEffect(ActivityPermissionHelper.hasRecognitionPermission(context)) {
         if (ActivityPermissionHelper.hasRecognitionPermission(context)) {
             val client = ActivityRecognition.getClient(context)
-            client.requestActivityUpdates(5000L, activityIntent)
-            onDispose { client.removeActivityUpdates(activityIntent) }
+            client.requestActivityUpdates(5_000L, activityPendingIntent)
+                .addOnSuccessListener { Log.i("ActReq", "✔️ Updates registered") }
+                .addOnFailureListener { e -> Log.e("ActReq", "❌ Failed: ${e.message}", e) }
+
+            onDispose { client.removeActivityUpdates(activityPendingIntent) }
         } else onDispose { }
     }
+
+
     DisposableEffect(context) {
-        val filter = IntentFilter(ActivityUpdatesReceiver.ACTION)
+        val filter = IntentFilter(ACTION_ACTIVITY_UPDATES)
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
+                Log.d("ActRx", "⏩ Intent recibido: ${intent.action}  extras=${intent.extras}")
+
                 if (ActivityRecognitionResult.hasResult(intent)) {
                     val result = ActivityRecognitionResult.extractResult(intent)!!
+                    Log.d("ActRx", "✅ EXTRA_ACTIVITY_RESULT encontrado")
                     mapViewModel.onActivityRecognitionResult(result)
+                } else {
+                    Log.w("ActRx", "⚠️ SIN ActivityRecognitionResult en el intent")
                 }
             }
         }
+
         ContextCompat.registerReceiver(context, receiver, filter, RECEIVER_EXPORTED)
         onDispose { context.unregisterReceiver(receiver) }
     }

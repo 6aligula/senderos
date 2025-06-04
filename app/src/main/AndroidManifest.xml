@@ -26,16 +26,6 @@
         android:theme="@style/Theme.Senderos"
         tools:targetApi="31">
 
-        <!-- Receiver para recibir los broadcasts de ActivityRecognition -->
-        <receiver
-            android:name=".ui.screens.ActivityUpdatesReceiver"
-            android:exported="true"
-            android:permission="com.google.android.gms.permission.ACTIVITY_RECOGNITION">
-            <intent-filter>
-                <action android:name="com.example.senderos.ACTION_ACTIVITY_UPDATES"/>
-            </intent-filter>
-        </receiver>
-
         <activity
             android:name=".MainActivity"
             android:exported="true"
