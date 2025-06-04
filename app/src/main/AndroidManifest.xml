@@ -14,9 +14,6 @@
         android:name="android.permission.ACTIVITY_RECOGNITION"
         tools:targetApi="29" />
 
-    <!-- Permiso interno que usa Play Services para Activity Recognition -->
-    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION" />
-
     <application
         android:usesCleartextTraffic="true"
         android:allowBackup="true"

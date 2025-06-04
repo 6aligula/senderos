@@ -2,6 +2,7 @@ package com.example.senderos.ui.screens
 
 import android.app.Application
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.senderos.model.LocationRequest
@@ -118,9 +119,13 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
         _selectedRoutePoints.value = null
     }
 
+    companion object { private const val TAG_STEP = "StepVM" }
+
     fun updateStepCount(count: Int) {
+        Log.d(TAG_STEP, "updateStepCount -> $count")   // ② LOG
         _stepCount.value = count
     }
+
 
     //-----------------------------------------------------------------------
     // Helper

@@ -1,6 +1,7 @@
 // ui/components/RequestActivityPermission.kt
 package com.example.senderos.ui.components
 
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
@@ -21,6 +22,7 @@ fun RequestActivityPermission(
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
+        Log.d("PermResult", "User answered: $granted")
         if (granted) onGranted() else onDenied()
     }
 

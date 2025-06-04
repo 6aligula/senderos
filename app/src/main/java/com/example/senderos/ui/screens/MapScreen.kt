@@ -36,6 +36,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.util.Log
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
@@ -44,6 +45,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import android.graphics.Color as AndroidColor
+private const val TAG_STEP = "StepSensor"
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -52,6 +54,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+
 
     // 1) Permisos
     RequestLocationPermission(onGranted = {}, onDenied = {})
@@ -106,24 +109,64 @@ fun MapScreen(
     // 5) Carga inicial de rutas
     LaunchedEffect(Unit) { mapViewModel.fetchRoutesList() }
 
-    // 6) Contador de pasos
-    DisposableEffect(Unit) {
-        val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
-        val stepSensor = sensorManager.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
-        val listener = object : SensorEventListener {
-            private var initial: Float? = null
-            override fun onSensorChanged(event: SensorEvent) {
-                val value = event.values.firstOrNull() ?: return
-                if (initial == null) initial = value
-                val steps = (value - (initial ?: value)).toInt()
-                mapViewModel.updateStepCount(steps)
+// 6) Contador de pasos  ────────────────────────────────────────────────
+    DisposableEffect(ActivityPermissionHelper.hasRecognitionPermission(context)) {
+
+        // variables que necesitamos inicializar aquí fuera
+        var sensorRegistered   = false
+        var sensorManager: SensorManager? = null
+        var listener: SensorEventListener? = null
+
+        // ── Bloque principal ──────────────────────────────────────────────
+        if (ActivityPermissionHelper.hasRecognitionPermission(context)) {
+
+            sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+            // counter o detector como fallback
+            val stepCounter  = sensorManager!!.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+            val stepDetector = sensorManager!!.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+            val sensor       = stepCounter ?: stepDetector
+
+            if (sensor != null) {
+
+                var detectorAccum = 0
+                listener = object : SensorEventListener {
+                    private var initial: Float? = null
+                    override fun onSensorChanged(event: SensorEvent) {
+                        val raw = event.values.firstOrNull() ?: return
+                        val steps = when (sensor.type) {
+                            Sensor.TYPE_STEP_COUNTER -> {
+                                if (initial == null) initial = raw
+                                (raw - (initial ?: raw)).toInt()
+                            }
+                            else -> { detectorAccum += 1; detectorAccum }
+                        }
+                        Log.d("StepSensor", "raw=$raw, steps=$steps")
+                        mapViewModel.updateStepCount(steps)
+                    }
+                    override fun onAccuracyChanged(s: Sensor?, accuracy: Int) {}
+                }
+
+                sensorManager!!.registerListener(
+                    listener, sensor, SensorManager.SENSOR_DELAY_UI
+                )
+                sensorRegistered = true
+                Log.d("StepInit", "Listener registrado ✅ (${sensor.name})")
+
+            } else {
+                Log.e("StepInit", "Dispositivo sin sensor de pasos")
             }
-            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        } else {
+            Log.w("StepInit", "Sin permiso — listener NO registrado")
         }
-        if (stepSensor != null) {
-            sensorManager.registerListener(listener, stepSensor, SensorManager.SENSOR_DELAY_NORMAL)
+
+        // ── Siempre devolvemos un DisposableEffectResult ──────────────────
+        onDispose {
+            if (sensorRegistered) {
+                sensorManager?.unregisterListener(listener)
+                Log.d("StepInit", "Listener desregistrado 📴")
+            }
         }
-        onDispose { sensorManager.unregisterListener(listener) }
     }
 
     // UI principal
@@ -196,7 +239,14 @@ fun MapScreen(
             Spacer(Modifier.height(4.dp))
             Text("Actividad: $currentActivity", color = Color.White, fontSize = 18.sp)
             Spacer(Modifier.height(4.dp))
-            Text("Pasos: $stepCount", color = Color.White, fontSize = 18.sp)
+            Text(
+                text = "Pasos: $stepCount".also {
+                    Log.d("StepUI", "recompose with $stepCount")
+                },
+                color = Color.White,
+                fontSize = 18.sp
+            )
+
         }
 
         // Botón “Ubi. actual”
