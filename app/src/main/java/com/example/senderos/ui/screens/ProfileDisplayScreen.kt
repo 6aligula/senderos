@@ -11,6 +11,7 @@ import androidx.navigation.NavHostController
 import coil.compose.rememberAsyncImagePainter
 import com.example.senderos.ProfileState
 import androidx.compose.ui.Alignment
+
 @Composable
 fun ProfileDisplayScreen(navController: NavHostController) {
     Column(
