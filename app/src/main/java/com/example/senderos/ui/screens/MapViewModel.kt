@@ -2,6 +2,7 @@ package com.example.senderos.ui.screens
 
 import android.app.Application
 import android.provider.Settings
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.senderos.model.LocationRequest
@@ -28,6 +29,10 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     // —— Estado de actividad ——
     private val _currentActivity = MutableStateFlow(UserActivity.UNKNOWN)
     val currentActivity = _currentActivity.asStateFlow()
+
+    // —— Estado de pasos ——
+    private val _stepCount = MutableStateFlow(0)
+    val stepCount = _stepCount.asStateFlow()
 
     //-----------------------------------------------------------------------
     // 1. UPLOAD de posición
@@ -70,17 +75,32 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     //-----------------------------------------------------------------------
     // 2. Clasificación de actividad
     //-----------------------------------------------------------------------
+// MapViewModel.kt
     fun classifyActivity(type: Int): UserActivity = when (type) {
-        DetectedActivity.STILL      -> UserActivity.STILL
-        DetectedActivity.WALKING    -> UserActivity.WALKING
-        DetectedActivity.RUNNING    -> UserActivity.RUNNING
-        DetectedActivity.IN_VEHICLE -> UserActivity.IN_VEHICLE
-        else                        -> UserActivity.UNKNOWN
+        DetectedActivity.STILL,
+        DetectedActivity.TILTING            // 5 → considéralos “quieto” (móvil en mano)
+            -> UserActivity.STILL
+
+        DetectedActivity.WALKING,           // 7
+        DetectedActivity.ON_FOOT,           // 2 (Android 10+ usa mucho este)
+        DetectedActivity.ON_BICYCLE         // 1  → si pedaleas, lo tratamos como “walk/run”
+            -> UserActivity.WALKING
+
+        DetectedActivity.RUNNING            // 8
+            -> UserActivity.RUNNING
+
+        DetectedActivity.IN_VEHICLE         // 0
+            -> UserActivity.IN_VEHICLE
+
+        else -> UserActivity.UNKNOWN
     }
 
+
     fun onActivityRecognitionResult(result: ActivityRecognitionResult) {
-        val mostLikely = result.probableActivities.maxByOrNull { it.confidence } ?: return
-        _currentActivity.value = classifyActivity(mostLikely.type)
+        val most = result.mostProbableActivity
+        if (most.confidence < 60) return            // ignora lecturas débiles
+        Log.d("ActRec", "mostLikely=${most.type} conf=${most.confidence}")
+        _currentActivity.value = classifyActivity(most.type)
     }
 
     //-----------------------------------------------------------------------
@@ -113,6 +133,14 @@ class MapViewModel(app: Application) : AndroidViewModel(app) {
     fun clearSelectedRoute() {
         _selectedRoutePoints.value = null
     }
+
+    companion object { private const val TAG_STEP = "StepVM" }
+
+    fun updateStepCount(count: Int) {
+        Log.d(TAG_STEP, "updateStepCount -> $count")   // ② LOG
+        _stepCount.value = count
+    }
+
 
     //-----------------------------------------------------------------------
     // Helper

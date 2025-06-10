@@ -32,6 +32,11 @@ import com.example.senderos.utils.ActivityPermissionHelper
 import com.example.senderos.utils.LocationPermissionHelper
 import com.example.senderos.model.UserActivity
 import com.google.android.gms.location.*
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.util.Log
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
@@ -40,6 +45,8 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import android.graphics.Color as AndroidColor
+private const val TAG_STEP = "StepSensor"
+private const val ACTION_ACTIVITY_UPDATES = "com.example.senderos.ACTION_ACTIVITY_UPDATES"
 
 @SuppressLint("MissingPermission")
 @Composable
@@ -48,6 +55,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+
 
     // 1) Permisos
     RequestLocationPermission(onGranted = {}, onDenied = {})
@@ -58,6 +66,7 @@ fun MapScreen(
     val trackPointsState by mapViewModel.trackPoints.collectAsState(initial = null)
     val routesListState by mapViewModel.routes.collectAsState(initial = emptyList())
     val selectedRoutePoints by mapViewModel.selectedRoutePoints.collectAsState(initial = null)
+    val stepCount by mapViewModel.stepCount.collectAsState(initial = 0)
 
     // 3) Estado local mapa
     var shouldFollowLocation by remember { mutableStateOf(true) }
@@ -68,38 +77,113 @@ fun MapScreen(
     val routeRef = remember { mutableStateOf<Polyline?>(null) }
 
     // 4) ActivityRecognition (igual que antes)...
-    val activityIntent = remember {
-        Intent(context, ActivityUpdatesReceiver::class.java).apply { action = ActivityUpdatesReceiver.ACTION }
-            .let { intent ->
-                PendingIntent.getBroadcast(
-                    context, 0, intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-            }
+    val activityPendingIntent = remember {
+        val intent = Intent(ACTION_ACTIVITY_UPDATES).apply {
+            // Limita el broadcast a *tu* paquete para que no sea global
+            `package` = context.packageName
+        }
+        PendingIntent.getBroadcast(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        )
     }
+
     DisposableEffect(ActivityPermissionHelper.hasRecognitionPermission(context)) {
         if (ActivityPermissionHelper.hasRecognitionPermission(context)) {
             val client = ActivityRecognition.getClient(context)
-            client.requestActivityUpdates(5000L, activityIntent)
-            onDispose { client.removeActivityUpdates(activityIntent) }
+            client.requestActivityUpdates(5_000L, activityPendingIntent)
+                .addOnSuccessListener { Log.i("ActReq", "✔️ Updates registered") }
+                .addOnFailureListener { e -> Log.e("ActReq", "❌ Failed: ${e.message}", e) }
+
+            onDispose { client.removeActivityUpdates(activityPendingIntent) }
         } else onDispose { }
     }
+
+
     DisposableEffect(context) {
-        val filter = IntentFilter(ActivityUpdatesReceiver.ACTION)
+        val filter = IntentFilter(ACTION_ACTIVITY_UPDATES)
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context, intent: Intent) {
+                Log.d("ActRx", "⏩ Intent recibido: ${intent.action}  extras=${intent.extras}")
+
                 if (ActivityRecognitionResult.hasResult(intent)) {
                     val result = ActivityRecognitionResult.extractResult(intent)!!
+                    Log.d("ActRx", "✅ EXTRA_ACTIVITY_RESULT encontrado")
                     mapViewModel.onActivityRecognitionResult(result)
+                } else {
+                    Log.w("ActRx", "⚠️ SIN ActivityRecognitionResult en el intent")
                 }
             }
         }
+
         ContextCompat.registerReceiver(context, receiver, filter, RECEIVER_EXPORTED)
         onDispose { context.unregisterReceiver(receiver) }
     }
 
     // 5) Carga inicial de rutas
     LaunchedEffect(Unit) { mapViewModel.fetchRoutesList() }
+
+// 6) Contador de pasos  ────────────────────────────────────────────────
+    DisposableEffect(ActivityPermissionHelper.hasRecognitionPermission(context)) {
+
+        // variables que necesitamos inicializar aquí fuera
+        var sensorRegistered   = false
+        var sensorManager: SensorManager? = null
+        var listener: SensorEventListener? = null
+
+        // ── Bloque principal ──────────────────────────────────────────────
+        if (ActivityPermissionHelper.hasRecognitionPermission(context)) {
+
+            sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+
+            // counter o detector como fallback
+            val stepCounter  = sensorManager!!.getDefaultSensor(Sensor.TYPE_STEP_COUNTER)
+            val stepDetector = sensorManager!!.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+            val sensor       = stepCounter ?: stepDetector
+
+            if (sensor != null) {
+
+                var detectorAccum = 0
+                listener = object : SensorEventListener {
+                    private var initial: Float? = null
+                    override fun onSensorChanged(event: SensorEvent) {
+                        val raw = event.values.firstOrNull() ?: return
+                        val steps = when (sensor.type) {
+                            Sensor.TYPE_STEP_COUNTER -> {
+                                if (initial == null) initial = raw
+                                (raw - (initial ?: raw)).toInt()
+                            }
+                            else -> { detectorAccum += 1; detectorAccum }
+                        }
+                        Log.d("StepSensor", "raw=$raw, steps=$steps")
+                        mapViewModel.updateStepCount(steps)
+                    }
+                    override fun onAccuracyChanged(s: Sensor?, accuracy: Int) {}
+                }
+
+                sensorManager!!.registerListener(
+                    listener, sensor, SensorManager.SENSOR_DELAY_UI
+                )
+                sensorRegistered = true
+                Log.d("StepInit", "Listener registrado ✅ (${sensor.name})")
+
+            } else {
+                Log.e("StepInit", "Dispositivo sin sensor de pasos")
+            }
+        } else {
+            Log.w("StepInit", "Sin permiso — listener NO registrado")
+        }
+
+        // ── Siempre devolvemos un DisposableEffectResult ──────────────────
+        onDispose {
+            if (sensorRegistered) {
+                sensorManager?.unregisterListener(listener)
+                Log.d("StepInit", "Listener desregistrado 📴")
+            }
+        }
+    }
 
     // UI principal
     Box(
@@ -170,6 +254,15 @@ fun MapScreen(
             } ?: Text("Buscando ubicación…", color = Color.LightGray, fontSize = 18.sp)
             Spacer(Modifier.height(4.dp))
             Text("Actividad: $currentActivity", color = Color.White, fontSize = 18.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Pasos: $stepCount".also {
+                    Log.d("StepUI", "recompose with $stepCount")
+                },
+                color = Color.White,
+                fontSize = 18.sp
+            )
+
         }
 
         // Botón “Ubi. actual”
@@ -203,7 +296,7 @@ fun MapScreen(
         }
     }
 
-    // 6) Location updates
+    // 7) Location updates
     DisposableEffect(LocationPermissionHelper.hasLocationPermission(context)) {
         if (LocationPermissionHelper.hasLocationPermission(context)) {
             val request = LocationRequest.Builder(5000L)
@@ -234,7 +327,7 @@ fun MapScreen(
         } else onDispose { }
     }
 
-    // 7) Dibujar track
+    // 8) Dibujar track
     LaunchedEffect(trackPointsState) {
         trackPointsState?.let { pts ->
             trackRef.value?.setPoints(pts.map { GeoPoint(it.first, it.second) })
@@ -242,7 +335,7 @@ fun MapScreen(
         }
     }
 
-    // 8) Dibujar ruta y hacer zoom a sus bounds
+    // 9) Dibujar ruta y hacer zoom a sus bounds
     LaunchedEffect(selectedRoutePoints) {
         selectedRoutePoints?.let { pts ->
             // Pintar polyline
