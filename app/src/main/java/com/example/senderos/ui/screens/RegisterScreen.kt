@@ -12,7 +12,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.launch
-import com.example.senderos.network.registerUser
+import com.example.senderos.network.RegisterClient // ✅ Importación correcta
 
 @Composable
 fun RegisterScreen(navController: NavHostController) {
@@ -32,6 +32,7 @@ fun RegisterScreen(navController: NavHostController) {
     ) {
         Text("Registro", style = MaterialTheme.typography.headlineLarge)
         Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(
             value = email,
             onValueChange = { email = it },
@@ -43,7 +44,9 @@ fun RegisterScreen(navController: NavHostController) {
             ),
             modifier = Modifier.fillMaxWidth(0.9f)
         )
+
         Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(
             value = password,
             onValueChange = { password = it },
@@ -55,7 +58,9 @@ fun RegisterScreen(navController: NavHostController) {
             ),
             modifier = Modifier.fillMaxWidth(0.9f)
         )
+
         Spacer(modifier = Modifier.height(16.dp))
+
         OutlinedTextField(
             value = confirmPassword,
             onValueChange = { confirmPassword = it },
@@ -67,12 +72,14 @@ fun RegisterScreen(navController: NavHostController) {
             ),
             modifier = Modifier.fillMaxWidth(0.9f)
         )
+
         Spacer(modifier = Modifier.height(24.dp))
+
         Button(
             onClick = {
                 if (email.isNotBlank() && password.isNotBlank() && password == confirmPassword) {
                     coroutineScope.launch {
-                        val result = registerUser(email, password)
+                        val result = RegisterClient.registerUser(email, password) // ✅ Uso del cliente
                         if (result == "Registro exitoso") {
                             navController.popBackStack()
                         } else {
@@ -87,11 +94,14 @@ fun RegisterScreen(navController: NavHostController) {
         ) {
             Text("Registrarse")
         }
+
         Spacer(modifier = Modifier.height(16.dp))
+
         if (errorMessage.isNotEmpty()) {
             Text(text = errorMessage, color = MaterialTheme.colorScheme.error)
             Spacer(modifier = Modifier.height(16.dp))
         }
+
         TextButton(onClick = { navController.popBackStack() }) {
             Text("Volver a iniciar sesión")
         }
