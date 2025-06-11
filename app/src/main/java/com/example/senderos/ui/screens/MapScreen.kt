@@ -31,6 +31,7 @@ import com.example.senderos.ui.components.RequestLocationPermission
 import com.example.senderos.utils.ActivityPermissionHelper
 import com.example.senderos.utils.LocationPermissionHelper
 import com.example.senderos.model.UserActivity
+import com.example.senderos.LocationSenderService
 import com.google.android.gms.location.*
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -75,6 +76,7 @@ fun MapScreen(
     val markerRef = remember { mutableStateOf<Marker?>(null) }
     val trackRef = remember { mutableStateOf<Polyline?>(null) }
     val routeRef = remember { mutableStateOf<Polyline?>(null) }
+    var serviceRunning by remember { mutableStateOf(false) }
 
     // 4) ActivityRecognition (igual que antes)...
     val activityPendingIntent = remember {
@@ -293,6 +295,21 @@ fun MapScreen(
                     )
                 }
             }
+        }
+
+        // Control del servicio de localización en segundo plano
+        Button(
+            onClick = {
+                if (serviceRunning) {
+                    LocationSenderService.stopService(context)
+                } else {
+                    LocationSenderService.startService(context)
+                }
+                serviceRunning = !serviceRunning
+            },
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
+        ) {
+            Text(if (serviceRunning) "Detener servicio" else "Iniciar servicio")
         }
     }
 
