@@ -28,6 +28,7 @@ import androidx.core.content.ContextCompat.RECEIVER_EXPORTED
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.senderos.ui.components.RequestActivityPermission
 import com.example.senderos.ui.components.RequestLocationPermission
+import com.example.senderos.ui.components.RequestNotificationPermission
 import com.example.senderos.utils.ActivityPermissionHelper
 import com.example.senderos.utils.LocationPermissionHelper
 import com.example.senderos.model.UserActivity
@@ -61,6 +62,7 @@ fun MapScreen(
     // 1) Permisos
     RequestLocationPermission(onGranted = {}, onDenied = {})
     RequestActivityPermission(onGranted = {}, onDenied = {})
+    RequestNotificationPermission(onGranted = {}, onDenied = {})
 
     // 2) Estados
     val currentActivity by mapViewModel.currentActivity.collectAsState(initial = UserActivity.UNKNOWN)

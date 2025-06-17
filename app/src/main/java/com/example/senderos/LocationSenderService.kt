@@ -1,38 +1,38 @@
 package com.example.senderos
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.*
+import android.content.pm.ServiceInfo
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.IBinder
+import android.os.Looper
 import android.provider.Settings
+import androidx.annotation.RequiresPermission
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.example.senderos.model.LocationRequest
-import android.os.Looper
-import com.example.senderos.R
+import com.example.senderos.utils.LocationPermissionHelper
 import com.example.senderos.utils.LocationSenderWorker
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest as GmsLocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.*
 
 class LocationSenderService : Service() {
+
     private lateinit var fusedClient: FusedLocationProviderClient
     private var callback: LocationCallback? = null
 
+    /* -------------------------------------------------- *
+     * Ciclo de vida
+     * -------------------------------------------------- */
     override fun onCreate() {
         super.onCreate()
         fusedClient = LocationServices.getFusedLocationProviderClient(this)
         createNotificationChannel()
     }
 
+    @SuppressLint("MissingPermission")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startUpdates()
@@ -41,28 +41,77 @@ class LocationSenderService : Service() {
         return START_STICKY
     }
 
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    /* -------------------------------------------------- *
+     * Localización
+     * -------------------------------------------------- */
+
+    @RequiresPermission(
+        anyOf = [           // 👈 NEW: obliga a quien lo llame a tener permiso
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ]
+    )
+    @SuppressLint("MissingPermission")
     private fun startUpdates() {
+        // 0) ¿Tenemos permiso?  — cinturón y tirantes
+        if (!LocationPermissionHelper.hasLocationPermission(this)) {
+            stopSelf()
+            return
+        }
+
+        // 1) ¿Ya estaba suscrito?
         if (callback != null) return
-        val request = GmsLocationRequest.Builder(5000L)
-            .setMinUpdateIntervalMillis(2000L)
-            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
+
+        // 2) Construir la petición
+        val request = com.google.android.gms.location.LocationRequest.Builder(5_000L)
+            .setMinUpdateIntervalMillis(2_000L)
             .setMinUpdateDistanceMeters(5f)
+            .setPriority(Priority.PRIORITY_HIGH_ACCURACY)
             .build()
+
+        // 3) Crear el callback
         callback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val loc = result.lastLocation ?: return
-                if (loc.accuracy > 10f) return
-                val payload = LocationRequest(
-                    device_id = deviceId(),
-                    lat       = loc.latitude,
-                    lon       = loc.longitude,
-                    timestamp = System.currentTimeMillis()
+                if (loc.accuracy > 10f) return            // filtro rápido
+                LocationSenderWorker.schedule(
+                    applicationContext,
+                    LocationRequest(
+                        device_id = deviceId(),
+                        lat       = loc.latitude,
+                        lon       = loc.longitude,
+                        timestamp = System.currentTimeMillis()
+                    )
                 )
-                LocationSenderWorker.schedule(applicationContext, payload)
             }
         }
-        fusedClient.requestLocationUpdates(request, callback!!, Looper.getMainLooper())
-        startForeground(NOTIF_ID, buildNotification())
+
+        // 4) Suscribirnos
+        try {
+            @Suppress("MissingPermission")
+            fusedClient.requestLocationUpdates(
+                request,
+                callback!!,
+                Looper.getMainLooper()
+            )
+        } catch (se: SecurityException) {                // cinturón n.º 2
+            stopSelf()
+            return
+        }
+
+        // 5) Servicio en primer plano
+        val notif = buildNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NOTIF_ID,
+                notif,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            )
+        } else {
+            startForeground(NOTIF_ID, notif)
+        }
     }
 
     private fun stopUpdates() {
@@ -72,12 +121,11 @@ class LocationSenderService : Service() {
         stopSelf()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    private fun deviceId(): String = Settings.Secure.getString(
-        contentResolver,
-        Settings.Secure.ANDROID_ID
-    )
+    /* -------------------------------------------------- *
+     * Utilidades varias
+     * -------------------------------------------------- */
+    private fun deviceId(): String =
+        Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
 
     private fun buildNotification(): Notification {
         val stopIntent = Intent(this, javaClass).apply { action = ACTION_STOP }
@@ -100,18 +148,23 @@ class LocationSenderService : Service() {
                 "Location Service",
                 NotificationManager.IMPORTANCE_LOW
             )
-            val nm = getSystemService(NotificationManager::class.java)
-            nm.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
     }
 
+    /* -------------------------------------------------- *
+     * API estática
+     * -------------------------------------------------- */
     companion object {
         private const val CHANNEL_ID = "location_service"
-        private const val NOTIF_ID = 1
-        const val ACTION_START = "com.example.senderos.LocationSenderService.START"
-        const val ACTION_STOP  = "com.example.senderos.LocationSenderService.STOP"
+        private const val NOTIF_ID   = 1
+        const val ACTION_START       = "com.example.senderos.LocationSenderService.START"
+        const val ACTION_STOP        = "com.example.senderos.LocationSenderService.STOP"
 
+        /** Arranca el servicio **solo** si ya tenemos permiso. */
         fun startService(context: Context) {
+            if (!LocationPermissionHelper.hasLocationPermission(context)) return // 👈 NEW
             val intent = Intent(context, LocationSenderService::class.java).apply {
                 action = ACTION_START
             }
