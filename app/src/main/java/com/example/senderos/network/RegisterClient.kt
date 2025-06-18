@@ -1,4 +1,3 @@
-// Archivo: app/src/main/java/com/example/senderos/network/RegisterClient.kt
 package com.example.senderos.network
 
 import com.example.senderos.BuildConfig
@@ -68,3 +67,4 @@ object RegisterClient {
         client.close()
     }
 }
+ 
